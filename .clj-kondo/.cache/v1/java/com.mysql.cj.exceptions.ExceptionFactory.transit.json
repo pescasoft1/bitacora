@@ -1,1 +1,0 @@
-["^ ","~:members",["^ ","<init>",["~#set",[["^ ","~:flags",["^2",["~:method","~:public"]]]]],"createException",["^2",[["^ ","^3",["^2",["^4","^5","~:static"]]]]],"createCommunicationsException",["^2",[["^ ","^3",["^2",["^4","^5","^7"]]]]],"createLinkFailureMessageBasedOnHeuristics",["^2",[["^ ","^3",["^2",["^4","^5","^7"]]]]]]]

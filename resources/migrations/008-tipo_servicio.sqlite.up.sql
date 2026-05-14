@@ -1,4 +1,0 @@
-CREATE TABLE tipo_servicio (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nombre TEXT
-);
