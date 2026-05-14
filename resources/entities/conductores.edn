@@ -1,0 +1,60 @@
+;; AUTO-GENERATED entity configuration for conductores
+;; Generated: 2026-05-09T02:35:50.443802056
+;; 
+;; This file was scaffolded from the database schema.
+;; Feel free to edit and customize as needed.
+;; 
+
+{:entity :conductores
+ :title "Conductores"  ;; Edit this to your preference
+ :table "conductores"
+ :connection :default
+ :rights ["U" "A" "S"]  ;; User levels: U=User, A=Admin, S=System
+ :mode :parameter-driven
+ :menu-category :Catalogos
+ :menu-icon "bi bi-people"
+ ;; Fields auto-detected from database schema
+ :fields [{:id :id :label "ID" :type :hidden}
+          {:id :nombre :label "Nombre" :type :text :required? true :placeholder "Nombre..."}
+          {:id :telefono :label "Telefono" :type :text :placeholder "Telefono..."}
+          {:id :licencia :label "Licencia" :type :text :placeholder "Licencia..."}
+          {:id :activo :label "Activo" :type :number}
+          {:id :fecha_registro :label "Fecha Registro" :type :textarea :placeholder "Fecha Registro..." :hidden-in-grid? true}]
+
+ ;; Auto-generated queries (customize as needed)
+ :queries {:list "SELECT * FROM conductores ORDER BY id DESC"
+           :get "SELECT * FROM conductores WHERE id = ?"}
+
+ ;; Available actions
+ :actions {:new true :edit true :delete true}
+
+ ;; Enable audit trail (tracks who created/modified and when)
+ ;; Uncomment to enable:
+ ;; :audit? true
+
+ ;; Lifecycle hooks for business logic
+ ;; Senior developer: Implement these in src/bitacora/hooks/conductores.clj
+ ;; Uncomment and implement as needed:
+ ;; :hooks {:before-load :bitacora.hooks.conductores/before-load
+ ;;         :after-load :bitacora.hooks.conductores/after-load
+ ;;         :before-save :bitacora.hooks.conductores/before-save
+ ;;         :after-save :bitacora.hooks.conductores/after-save
+ ;;         :before-delete :bitacora.hooks.conductores/before-delete
+ ;;         :after-delete :bitacora.hooks.conductores/after-delete}
+
+ ;; Subgrids for related tables (auto-detected)
+ :subgrids [{:entity :cargas_gasolina
+             :title "Cargas Gasolina"
+             :foreign-key :conductor_id
+             :icon "bi bi-list-ul"
+             :label "Cargas Gasolina"}
+            {:entity :inventario_motocicleta
+             :title "Inventario Motocicleta"
+             :foreign-key :conductor_id
+             :icon "bi bi-currency-dollar"
+             :label "Inventario Motocicleta"}
+            {:entity :servicios_vehiculo
+             :title "Servicios Vehiculo"
+             :foreign-key :conductor_id
+             :icon "bi bi-list-ul"
+             :label "Servicios Vehiculo"}]}

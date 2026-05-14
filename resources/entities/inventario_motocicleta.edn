@@ -1,0 +1,538 @@
+;; AUTO-GENERATED entity configuration for inventario_motocicleta
+;; Generated: 2026-05-08T01:04:22.988983010
+;;
+;; This file was scaffolded from the database schema.
+;; Feel free to edit and customize as needed.
+;;
+
+{:entity :inventario_motocicleta
+ :title "Inventario Motocicleta"
+ :table "inventario_motocicleta"
+ :connection :default
+ :rights ["U" "A" "S"]
+ :mode :parameter-driven
+ :menu-category :transacciones
+ :menu-icon "bi bi-card-checklist"
+ :fields [{:id :id
+           :label "ID"
+           :type :hidden}
+
+          {:id :vehiculo_id
+           :label "Vehículo"
+           :type :hidden}
+
+          {:id :conductor_id
+           :label "Conductor"
+           :type :hidden}
+
+          {:id :fecha_inventario
+           :label "Fecha Inventario"
+           :type :date
+           :required? true
+           :placeholder "Fecha inventario..."}
+
+          {:id :fecha_entrega
+           :label "Fecha Entrega"
+           :type :date
+           :placeholder "Fecha entrega..."}
+
+          {:id :odometro
+           :label "Lectura Odómetro"
+           :type :number
+           :placeholder "Lectura odómetro..."}
+
+          {:id :observaciones
+           :label "Observaciones"
+           :type :textarea
+           :placeholder "Observaciones..."}
+
+          {:id :retrovisores
+           :label "Retrovisores"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :llantas
+           :label "Llantas"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :llanta_delantera
+           :label "Llanta Delantera"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :llanta_trasera
+           :label "Llanta Trasera"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :direccionales
+           :label "Direccionales"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :foco_delantero
+           :label "Foco Delantero"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :cadena
+           :label "Cadena"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :topes_manubrio
+           :label "Topes de Manubrio"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :tope_manubrio_derecho
+           :label "Tope de Manubrio Derecho"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :tope_manubrio_izquierdo
+           :label "Tope de Manubrio Izquierdo"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :stop
+           :label "Stop"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :luz_trasera
+           :label "Luz Trasera"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :luces_muertas
+           :label "Luces Muertas"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :orquilla_delantera
+           :label "Orquilla Delantera"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :orquilla_trasera
+           :label "Orquilla Trasera"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :resorte_stand
+           :label "Resorte del Stand"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :resorte_caballete
+           :label "Resorte Caballete"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :bujes_rin_trasero
+           :label "Bujes Rin Trasero"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :bujias
+           :label "Bujías"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :cable_clutch
+           :label "Cable Clutch"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :cable_acelerador
+           :label "Cable Acelerador"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :cable_velocimetro
+           :label "Cable de Velocímetro"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :tapon_aceite
+           :label "Tapón del Aceite"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :micas_direccionales
+           :label "Micas de Direccionales"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :micas_direccionales_delanteras
+           :label "Micas Direccionales Delanteras"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :micas_direccionales_traseras
+           :label "Micas Direccionales Traseras"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :claxon
+           :label "Claxon"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :retenes
+           :label "Retenes"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :nivel_aceite
+           :label "Nivel de Aceite"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :ajustadores_cadenas
+           :label "Ajustadores de Cadenas"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :guardafangos
+           :label "Guardafangos"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :tapaderas_lados
+           :label "Tapaderas de los Lados"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :tapadera_filtro
+           :label "Tapadera de Filtro"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :tapadera_pila
+           :label "Tapadera Pila"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :balatas_delanteras
+           :label "Balatas Delanteras"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :balatas_traseras
+           :label "Balatas Traseras"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :pila
+           :label "Pila"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :selector_cambios
+           :label "Selector de Cambios"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :relay_direccionales
+           :label "Relay de Direccionales"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :guardacadenas
+           :label "Guardacadenas"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :tope_asiento
+           :label "Tope de Asiento"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :hule_reposapie_izquierdo
+           :label "Hule de Reposapié Izquierdo"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :hule_reposapie_derecho
+           :label "Hule de Reposapié Derecho"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :reposamano
+           :label "Reposamano"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :freno_delantero
+           :label "Freno Delantero"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :clutch
+           :label "Clutch"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :liquido_freno
+           :label "Líquido de Freno"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :tolba_mofle
+           :label "Tolba de Mofle"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :reposa_pies_copiloto_izquierdo
+           :label "Reposa Pies Copiloto Izquierdo"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :reposa_pies_copiloto_derecho
+           :label "Reposa Pies Copiloto Derecho"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :herramienta
+           :label "Herramienta"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :switch_encendido
+           :label "Switch de Encendido"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :switch_luces
+           :label "Switch Luces"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :switch_direccionales
+           :label "Switch Direccionales"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :estetica_tanque_gasolina
+           :label "Estética del Tanque de Gasolina"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :condicion_marcadores
+           :label "Condición de Marcadores"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :bujes_orquilla_trasera
+           :label "Bujes Horquilla Trasera"
+           :type :radio
+           :options [{:value "Bueno" :label "Bueno"}
+                     {:value "Regular" :label "Regular"}
+                     {:value "Malo" :label "Malo"}
+                     {:value "No aplica" :label "No aplica"}]}
+
+          {:id :foto_frontal
+           :label "Foto Frontal"
+           :type :file}
+
+          {:id :foto_trasera
+           :label "Foto Trasera"
+           :type :file}
+
+          {:id :foto_lateral
+           :label "Foto Lateral"
+           :type :file}
+
+          {:id :estatus
+           :label "Estatus"
+           :type :hidden}
+
+          {:id :fecha_actualizacion
+           :label "Fecha Actualización"
+           :type :hidden}]
+
+ :queries {:list "SELECT inv.*, con.nombre as conductor_nombre, veh.nombre as vehiculo_nombre
+                  FROM inventario_motocicleta inv
+                  LEFT JOIN conductores con ON inv.conductor_id = con.id
+                  LEFT JOIN vehiculos veh ON inv.vehiculo_id = veh.id
+                  ORDER BY inv.id DESC"
+           :get "inv.*, con.nombre as conductor_nombre, veh.nombre as vehiculo_nombre
+                  FROM inventario_motocicleta inv
+                  LEFT JOIN conductores con ON inv.conductor_id = con.id
+                  LEFT JOIN vehiculos veh ON inv.vehiculo_id = veh.id 
+                 WHERE inv.id = ?"}
+
+ :actions {:new true
+           :edit true
+           :delete true}}
