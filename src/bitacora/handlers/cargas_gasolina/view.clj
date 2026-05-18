@@ -19,6 +19,10 @@
   (when n
     (format (str "%." decimals "f") (double n))))
 
+(defn- fmt-odo [n]
+  (when n
+    (format "%,d" (long n))))
+
 (defn- selected? [a b]
   (= (str a) (str b)))
 
@@ -43,13 +47,12 @@
        {:type "button" :data-bs-dismiss "modal"}]]
      [:div.modal-body.text-center.p-2
       [:img#imgModal-img
-       {:src   ""
+       {:src ""
         :style "max-width:100%;max-height:80vh;object-fit:contain;border-radius:4px"}]]]]])
 
 ;; ─────────────────────────────────────────
 ;; Campo de imagen
 ;; ─────────────────────────────────────────
-
 (defn- image-field [field-id label current-val]
   [:div.col-md-4
    [:label.form-label.fw-semibold label]
@@ -59,6 +62,7 @@
    [:input {:type     "file"
             :id       (str field-id "-file")
             :accept   "image/*"
+            :capture  "environment"
             :class    "d-none"
             :onchange (str "CargasGasolina.onFileSelected('" field-id "')")}]
 
@@ -77,6 +81,12 @@
       :title   "Buscar imagen"
       :onclick (str "document.getElementById('" field-id "-file').click()")}
      "📁"]
+
+    [:button.btn.btn-sm.btn-outline-primary
+     {:type    "button"
+      :title   "Tomar foto"
+      :onclick (str "document.getElementById('" field-id "-file').click()")}
+     "📷"]
 
     [:button.btn.btn-sm.btn-outline-primary
      {:type     "button"
@@ -103,7 +113,6 @@
         :style   "max-height:90px;max-width:100%;object-fit:cover;cursor:zoom-in;border-radius:4px"
         :onclick (str "CargasGasolina.openModal('" field-id "')")
         :title   "Click para ver en grande"}])]])
-
 ;; ─────────────────────────────────────────
 ;; Botones de tabla
 ;; ─────────────────────────────────────────
@@ -117,12 +126,16 @@
 (defn- btn-del [id]
   [:button.btn.btn-sm.btn-outline-danger {:onclick (str "CargasGasolina.delete(" id ")")} "Eliminar"])
 
+(defn- sortable-th [label key]
+  [:th {:style "cursor:pointer;user-select:none"
+        :title (str "Ordenar por " label)
+        :onclick (str "CargasGasolina.sortGrid('" key "')")}
+   label])
+
 ;; ─────────────────────────────────────────
 ;; Index
 ;; ─────────────────────────────────────────
-
- 
-(defn index-view [_req lista fecha-inicio fecha-fin]
+(defn index-view [_req lista fecha-inicio fecha-fin vehiculos vehiculo-id]
   (let [csrf (anti-forgery-field)]
     [:div.container.mt-4
 
@@ -148,6 +161,21 @@
           {:type "date"
            :name "fecha_fin"
            :value (or fecha-fin "")}]]
+        
+        [:div.col-md-4
+         [:label.form-label.fw-semibold "Vehículo"]
+         [:select.form-select
+          {:name "vehiculo_id"}
+          [:option {:value ""} "Todos los vehículos"]
+          (for [v vehiculos]
+            [:option {:value (:id v)
+                      :selected (= (str (:id v)) (str vehiculo-id))}
+             (str (:placa v) " — " (:nombre v) " " (:modelo v))])]]
+
+
+
+
+
         [:div.col-md-6.d-flex.gap-2
          [:button.btn.btn-primary {:type "submit"} "Buscar"]
          [:a.btn.btn-outline-secondary {:href "/cargas-gasolina"} "Limpiar"]]]]]
@@ -175,7 +203,16 @@
         (if (empty? lista)
           [:tr [:td {:colSpan 13 :class "text-center text-muted"} "No hay cargas registradas."]]
           (for [c lista]
-            [:tr
+            [:tr {:data-id (str (:id c))
+                  :data-fecha (when (:fecha c) (subs (str (:fecha c)) 0 10))
+                  :data-vehiculo (str/lower-case (str (or (:placa c) "") " " (or (:vehiculo_nombre c) "")))
+                  :data-conductor (str/lower-case (str (or (:conductor_nombre c) "")))
+                  :data-combustible (str/lower-case (str (or (:tipo_combustible c) "")))
+                  :data-observaciones (str/lower-case (str (or (:observaciones c) "")))
+                  :data-total (str (or (:total c) ""))
+                  :data-litros (str (or (:litros c) ""))
+                  :data-precio (str (or (:precio_litro c) ""))
+                  :data-odometro (str (or (:odometro c) ""))}
              [:td (:id c)]
              [:td (fmt-fecha (:fecha c))]
              [:td [:span.fw-semibold (or (:placa c) "—")] [:br] [:small.text-muted (or (:vehiculo_nombre c) "")]]
@@ -211,13 +248,22 @@
 
      (image-modal)
      [:script {:src "/js/cargas-gasolina.js"}]]))
+
 ;; ─────────────────────────────────────────
 ;; Edit / Nuevo
 ;; ─────────────────────────────────────────
 
-(defn edit-view [_req carga vehiculos conductores]
-  (let [csrf   (anti-forgery-field)
-        nuevo? (nil? carga)]
+(defn edit-view [_req carga vehiculos conductores ultimo-odo]
+  (let [csrf     (anti-forgery-field)
+        nuevo?   (nil? carga)
+        odo-ant  (when ultimo-odo (:odometro ultimo-odo))
+        odo-act  (:odometro carga)
+        diff     (when (and odo-ant odo-act) (- odo-act odo-ant))
+        ref-text (if odo-ant
+                   (str "Folio #" (:id ultimo-odo)
+                        " · " (fmt-fecha (:fecha ultimo-odo))
+                        " · " (fmt-odo odo-ant) " km")
+                   "Sin carga anterior")]
 
     [:div.container.mt-3
 
@@ -241,7 +287,8 @@
 
         [:div.col-md-4
          [:label.form-label.fw-semibold "Vehículo"]
-         [:select#vehiculo_id.form-select
+        [:select#vehiculo_id.form-select
+         {:onchange "CargasGasolina.onVehiculoChange(this.value);CargasGasolina.calcDiffOdo();"}
           [:option {:value ""} "-- Seleccionar --"]
           (for [v vehiculos]
             [:option {:value (:id v) :selected (selected? (:id v) (:vehiculo_id carga))}
@@ -271,35 +318,81 @@
         [:div.col-md-3
          [:label.form-label.fw-semibold "Litros"]
          [:input#litros.form-control
-          {:type "number" :step "0.01" :min "0"
+          {:type "number"
+           :step "0.01"
+           :min "0"
            :value (or (fmt-num (:litros carga) 2) "")
            :oninput "CargasGasolina.calcTotal()"}]]
 
         [:div.col-md-3
          [:label.form-label.fw-semibold "Precio por Litro ($)"]
          [:input#precio_litro.form-control
-          {:type "number" :step "0.01" :min "0"
+          {:type "number"
+           :step "0.01"
+           :min "0"
            :value (or (fmt-num (:precio_litro carga) 2) "")
            :oninput "CargasGasolina.calcTotal()"}]]
 
         [:div.col-md-3
          [:label.form-label.fw-semibold "Total ($)"]
          [:input#total.form-control.fw-bold
-          {:type "number" :step "0.01" :min "0"
+          {:type "number"
+           :step "0.01"
+           :min "0"
            :value (or (fmt-num (:total carga) 2) "")
            :style "background:#f0fff4"}]]
 
         [:div.col-md-4
          [:label.form-label.fw-semibold "Odómetro (km)"]
-         [:input#odometro.form-control
-          {:type "number" :min "0" :value (or (:odometro carga) "")}]]
+        [:input#odometro.form-control
+         {:type "number"
+          :min "0"
+          :value (or (:odometro carga) "")
+          :oninput "CargasGasolina.calcDiffOdo()"
+          :onkeyup "CargasGasolina.calcDiffOdo()"
+          :onchange "CargasGasolina.calcDiffOdo(true)"
+          :onblur "CargasGasolina.calcDiffOdo(true)"}]
 
-        (image-field "imagen"        "Foto/Imagen del Odometro" (:imagen carga))
-        (image-field "ticket_imagen" "Foto/Imagen del Ticket"    (:ticket_imagen carga))
+         [:div#odo-error-msg
+          {:style "display:none;color:#dc3545;font-size:.82rem;font-weight:600;margin-top:4px"}]
+
+         [:div#odo-ref-box.mt-2.p-2.rounded
+          {:style "background:#f8f9fa;border:1px solid #dee2e6;font-size:.85rem;display:block"}
+
+          [:label.form-label.fw-semibold.mb-1 "Última carga registrada"]
+
+          [:input.form-control.form-control-sm.mb-2
+           {:type "text"
+            :id "odo-ant-input"
+            :readonly true
+            :value ref-text
+            :style "background:#fff"}]
+
+          [:input {:type "hidden"
+                   :id "odo-ant-val"
+                   :value (str (or odo-ant ""))
+                   :data-odo-ant (str (or odo-ant ""))}]
+
+          [:div#odo-diff-row.mt-1
+           {:style (cond
+                     (nil? odo-ant)        "color:#6c757d"
+                     (and diff (> diff 0)) "color:#198754"
+                     :else                 "color:#dc3545")}
+           "Diferencia: "
+           [:strong#odo-diff-val
+            (cond
+              (nil? odo-ant) "—"
+              (nil? odo-act) "—"
+              (> diff 0)     (str "+" diff " km")
+              :else          (str diff " km"))]]]]
+
+        (image-field "imagen" "Foto/Imagen del Odometro" (:imagen carga))
+        (image-field "ticket_imagen" "Foto/Imagen del Ticket" (:ticket_imagen carga))
 
         [:div.col-12
          [:label.form-label.fw-semibold "Observaciones"]
-         [:textarea#observaciones.form-control {:rows 4}
+         [:textarea#observaciones.form-control
+          {:rows 4}
           (or (:observaciones carga) "")]]]]]
 
      (image-modal)

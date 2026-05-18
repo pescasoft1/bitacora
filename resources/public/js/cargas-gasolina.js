@@ -33,362 +33,518 @@ const CargasGasolina = (() => {
     return el ? el.value.trim() : '';
   }
 
-  function esc(value) {
-    return String(value ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+  function fmtFecha(iso) {
+    if (!iso) return '';
+    const s = iso.substring(0, 10);
+    const [y, m, d] = s.split('-');
+    return d + '/' + m + '/' + y;
   }
 
+  // Helpers para parsear números (admite separadores de miles y comas decimales)
+  function parseNumber(raw) {
+    if (raw == null) return NaN;
+    let s = String(raw).trim();
+    if (!s) return NaN;
+    // eliminar símbolos no numéricos salvo punto, coma y signo
+    s = s.replace(/[^0-9,.-]/g, '');
+    // si hay coma como separador decimal, convertir a punto
+    if (s.indexOf(',') > -1) {
+      // si también hay puntos antes de la coma, probablemente son miles -> eliminarlos
+      const lastComma = s.lastIndexOf(',');
+      const lastDot = s.lastIndexOf('.');
+      if (lastDot !== -1 && lastDot < lastComma) {
+        s = s.replace(/\./g, '');
+      }
+      s = s.replace(/,/g, '.');
+    } else {
+      // eliminar espacios residuales
+      s = s.replace(/ /g, '');
+    }
+    return parseFloat(s);
+  }
+
+  function parseIntSafe(raw) {
+    if (raw == null) return NaN;
+    let s = String(raw).trim();
+    if (!s) return NaN;
+    // conservar solo dígitos y signo negativo (si existiera)
+    s = s.replace(/[^0-9-]/g, '');
+    return parseInt(s, 10);
+  }
+
+  // =========================================================
+  // TOTAL
+  // =========================================================
+
   function calcTotal() {
-    const litros = parseFloat(val('litros')) || 0;
-    const precio = parseFloat(val('precio_litro')) || 0;
+    const litros = parseNumber(val('litros')) || 0;
+    const precio = parseNumber(val('precio_litro')) || 0;
+
+    const total = litros * precio;
+
     const el = document.getElementById('total');
-    if (el && litros > 0 && precio > 0) {
-      el.value = (litros * precio).toFixed(2);
+    if (el) {
+      el.value = (!isNaN(total) && total > 0) ? total.toFixed(2) : '';
     }
   }
 
-  function onFileSelected(fieldId) {
-    const fileInput = document.getElementById(fieldId + '-file');
-    const file = fileInput && fileInput.files[0];
-    if (!file) return;
+  // =========================================================
+  // DIFERENCIA ODÓMETRO
+  // =========================================================
+function calcDiffOdo(showValidation) {
 
-    if (!file.type || !file.type.startsWith('image/')) {
-      alert('Selecciona un archivo de imagen válido.');
-      fileInput.value = '';
+  const inputEl  = document.getElementById('odometro');
+  const antEl    = document.getElementById('odo-ant-val');
+  const diffRow  = document.getElementById('odo-diff-row');
+  const diffVal  = document.getElementById('odo-diff-val');
+  const errorMsg = document.getElementById('odo-error-msg');
+  const isBlur = !!showValidation;
+
+  if (!inputEl || !antEl || !diffRow || !diffVal) {
+    return;
+  }
+
+  const setOdoInvalid = msg => {
+    if (errorMsg) {
+      errorMsg.textContent = msg;
+      errorMsg.style.display = 'block';
+    }
+    inputEl.classList.add('is-invalid');
+    inputEl.classList.remove('is-valid');
+    if (inputEl.setCustomValidity) {
+      inputEl.setCustomValidity(msg);
+    }
+    if (isBlur && inputEl.reportValidity) {
+      inputEl.reportValidity();
+    }
+  };
+
+  const clearOdoValidity = () => {
+    if (errorMsg) {
+      errorMsg.style.display = 'none';
+      errorMsg.textContent = '';
+    }
+    inputEl.classList.remove('is-invalid');
+    inputEl.classList.add('is-valid');
+    if (inputEl.setCustomValidity) {
+      inputEl.setCustomValidity('');
+    }
+  };
+
+  const clearOdoState = () => {
+    diffVal.textContent = '—';
+    diffRow.style.color = '#6c757d';
+    if (errorMsg) {
+      errorMsg.style.display = 'none';
+      errorMsg.textContent = '';
+    }
+    inputEl.classList.remove('is-invalid');
+    inputEl.classList.remove('is-valid');
+    if (inputEl.setCustomValidity) {
+      inputEl.setCustomValidity('');
+    }
+  };
+
+  const odAnt = parseIntSafe(
+    antEl.dataset.odoAnt || antEl.value
+  );
+
+  if (isNaN(odAnt)) {
+    clearOdoState();
+    return;
+  }
+
+  const raw = inputEl.value.trim();
+
+  if (!raw) {
+    clearOdoState();
+    return;
+  }
+
+  const odAct = parseIntSafe(raw);
+
+  if (isNaN(odAct)) {
+    if (isBlur) {
+      setOdoInvalid('Ingrese un valor válido para el odómetro.');
+    }
+    return;
+  }
+
+  const diff = odAct - odAnt;
+
+  if (diff > 0) {
+
+    diffVal.textContent =
+      '+' + diff.toLocaleString() + ' km';
+
+    diffRow.style.color = '#198754';
+
+    if (errorMsg) {
+      errorMsg.style.display = 'none';
+    }
+
+    clearOdoValidity();
+
+  } else if (diff < 0) {
+
+    diffVal.textContent =
+      diff.toLocaleString() + ' km';
+
+    diffRow.style.color = '#dc3545';
+
+    setOdoInvalid('⚠ El odómetro ingresado debe ser mayor al anterior');
+
+  } else {
+
+    diffVal.textContent = '0 km';
+
+    diffRow.style.color = '#fd7e14';
+
+    setOdoInvalid('⚠ El odómetro ingresado debe ser mayor al anterior');
+  }
+}
+
+  // =========================================================
+  // CAMBIO VEHÍCULO
+  // =========================================================
+
+ function onVehiculoChange(vehiculoId) {
+
+  const refBox   = document.getElementById('odo-ref-box');
+  const antEl    = document.getElementById('odo-ant-val');
+  const antInput = document.getElementById('odo-ant-input');
+  const diffVal  = document.getElementById('odo-diff-val');
+  const diffRow  = document.getElementById('odo-diff-row');
+
+  if (!vehiculoId) {
+
+    if (refBox) refBox.style.display = 'block';
+
+    if (antInput) {
+      antInput.value = 'Sin carga anterior';
+    }
+
+    if (antEl) {
+      antEl.value = '';
+      antEl.dataset.odoAnt = '';
+    }
+
+    if (diffVal) diffVal.textContent = '—';
+    if (diffRow) diffRow.style.color = '#6c757d';
+
+    return;
+  }
+
+  fetch(
+    '/cargas-gasolina/ultimo-odometro?vehiculo_id=' +
+    encodeURIComponent(vehiculoId),
+    {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'X-CSRF-Token': csrf()
+      }
+    }
+  )
+    .then(r => r.json())
+    .then(resp => {
+
+      console.log('ULTIMO ODOMETRO:', resp);
+
+      if (!resp.ok || resp.odometro == null) {
+
+        if (antInput) {
+          antInput.value = 'Sin carga anterior';
+        }
+
+        if (antEl) {
+          antEl.value = '';
+          antEl.dataset.odoAnt = '';
+        }
+
+        if (diffVal) diffVal.textContent = '—';
+
+        return;
+      }
+
+      const odAnt = parseInt(resp.odometro, 10);
+
+      if (antInput) {
+        antInput.value =
+          'Último odómetro: ' +
+          odAnt.toLocaleString() +
+          ' km';
+      }
+
+      if (antEl) {
+        antEl.value = String(odAnt);
+        antEl.dataset.odoAnt = String(odAnt);
+      }
+
+      if (refBox) {
+        refBox.style.display = 'block';
+      }
+
+      calcDiffOdo();
+    })
+    .catch(err => {
+      console.error('ERROR CONSULTANDO ODOMETRO:', err);
+    });
+}
+  // =========================================================
+  // GUARDAR
+  // =========================================================
+
+  function save() {
+
+    calcTotal();
+    calcDiffOdo();
+
+    const antEl = document.getElementById('odo-ant-val');
+
+    const odAnt = parseIntSafe(
+      antEl.dataset.odoAnt || antEl.value
+    );
+
+    const odAct = parseIntSafe(val('odometro'));
+
+    if (
+      !isNaN(odAnt) &&
+      !isNaN(odAct) &&
+      odAct <= odAnt
+    ) {
+
+      alert(
+        'El odómetro ingresado (' +
+        odAct.toLocaleString() +
+        ' km) debe ser mayor al anterior (' +
+        odAnt.toLocaleString() +
+        ' km).'
+      );
+
       return;
     }
 
-    const reader = new FileReader();
-
-    reader.onload = function (e) {
-      const base64 = e.target.result;
-
-      const hidden = document.getElementById(fieldId);
-      if (hidden) hidden.value = base64;
-
-      const display = document.getElementById(fieldId + '-display');
-      if (display) display.value = file.name;
-
-      const preview = document.getElementById(fieldId + '-preview');
-      if (preview) {
-        preview.innerHTML = '';
-
-        const thumb = document.createElement('img');
-        thumb.id = fieldId + '-thumb';
-        thumb.className = 'img-thumbnail';
-        thumb.style.cssText =
-          'max-height:90px;max-width:100%;object-fit:cover;' +
-          'cursor:zoom-in;border-radius:4px;display:block;margin-top:4px';
-        thumb.title = 'Click para ver en grande';
-        thumb.onclick = () => openModal(fieldId);
-        thumb.src = base64;
-        preview.appendChild(thumb);
-      }
-
-      const clearBtn = document.getElementById(fieldId + '-clear');
-      if (clearBtn) clearBtn.style.display = 'inline-block';
-
-      const viewBtn = document.getElementById(fieldId + '-view');
-      if (viewBtn) viewBtn.disabled = false;
+    const payload = {
+      id: val('carga-id') || null,
+      vehiculo_id: val('vehiculo_id'),
+      conductor_id: val('conductor_id'),
+      fecha: val('fecha'),
+      tipo_combustible: val('tipo_combustible'),
+      litros: val('litros'),
+      precio_litro: val('precio_litro'),
+      total: val('total'),
+      odometro: val('odometro'),
+      observaciones: val('observaciones'),
+      imagen: val('imagen'),
+      ticket_imagen: val('ticket_imagen')
     };
 
-    reader.readAsDataURL(file);
+    postJSON('/cargas-gasolina/guardar', payload)
+      .then(resp => {
+
+        if (resp.ok) {
+
+          window.location.href =
+            '/cargas-gasolina';
+
+        } else {
+
+          alert(
+            'Error al guardar: ' +
+            (resp.error || 'desconocido')
+          );
+        }
+      })
+      .catch(err => {
+        alert(err);
+      });
   }
+
+  // =========================================================
+  // ELIMINAR
+  // =========================================================
+
+  function deleteItem(id) {
+
+    if (!confirm('¿Eliminar registro?')) {
+      return;
+    }
+
+    fetch('/cargas-gasolina/eliminar/' + id, {
+      method: 'POST',
+      headers: {
+        'X-CSRF-Token': csrf()
+      }
+    })
+      .then(r => r.json())
+      .then(resp => {
+
+        if (resp.ok) {
+
+          location.reload();
+
+        } else {
+
+          alert(resp.error || 'Error eliminando');
+        }
+      });
+  }
+
+  // =========================================================
+  // IMÁGENES
+  // =========================================================
 
   function clearImage(fieldId) {
     const hidden = document.getElementById(fieldId);
-    if (hidden) hidden.value = '';
-
     const display = document.getElementById(fieldId + '-display');
-    if (display) {
-      display.value = '';
-      display.placeholder = 'Sin imagen';
-    }
-
-    const file = document.getElementById(fieldId + '-file');
-    if (file) file.value = '';
-
     const preview = document.getElementById(fieldId + '-preview');
-    if (preview) preview.innerHTML = '';
-
+    const fileInput = document.getElementById(fieldId + '-file');
     const clearBtn = document.getElementById(fieldId + '-clear');
-    if (clearBtn) clearBtn.style.display = 'none';
-
     const viewBtn = document.getElementById(fieldId + '-view');
+
+    if (hidden) hidden.value = '';
+    if (display) display.value = '';
+    if (preview) preview.innerHTML = '';
+    if (fileInput) fileInput.value = '';
+    if (clearBtn) clearBtn.style.display = 'none';
     if (viewBtn) viewBtn.disabled = true;
   }
 
-  function openModal(fieldId) {
-    const hidden = document.getElementById(fieldId);
-    const src = hidden ? hidden.value : '';
-    if (!src) return;
+  async function onFileSelected(fieldId) {
+  const fileInput = document.getElementById(fieldId + '-file');
+  const file = fileInput && fileInput.files[0];
+  if (!file) return;
 
-    const label = fieldId === 'imagen' ? 'Imagen de la Carga' : 'Ticket';
-    openModalSrc(src, label);
+  if (!file.type || !file.type.startsWith('image/')) {
+    alert('Selecciona un archivo de imagen válido.');
+    fileInput.value = '';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('foto', file);
+
+  const resp = await fetch('/cargas-gasolina/subir-imagen', {
+    method: 'POST',
+    headers: {
+      'X-CSRF-Token': csrf()
+    },
+    body: formData
+  });
+
+  const data = await resp.json();
+
+  if (!data.ok) {
+    alert(data.error || 'No se pudo subir la foto.');
+    return;
+  }
+
+  const hidden = document.getElementById(fieldId);
+  if (hidden) hidden.value = data.url;
+
+  const display = document.getElementById(fieldId + '-display');
+  if (display) display.value = file.name;
+
+  const preview = document.getElementById(fieldId + '-preview');
+  if (preview) {
+    preview.innerHTML = '';
+
+    const thumb = document.createElement('img');
+    thumb.id = fieldId + '-thumb';
+    thumb.className = 'img-thumbnail';
+    thumb.style.cssText =
+      'max-height:90px;max-width:100%;object-fit:cover;' +
+      'cursor:zoom-in;border-radius:4px;display:block;margin-top:4px';
+    thumb.title = 'Click para ver en grande';
+    thumb.onclick = () => openModal(fieldId);
+    thumb.src = data.url;
+    preview.appendChild(thumb);
+  }
+
+  const clearBtn = document.getElementById(fieldId + '-clear');
+  if (clearBtn) clearBtn.style.display = 'inline-block';
+
+  const viewBtn = document.getElementById(fieldId + '-view');
+  if (viewBtn) viewBtn.disabled = false;
+}
+
+  function openModal(fieldId) {
+
+    const hidden =
+      document.getElementById(fieldId);
+
+    if (!hidden || !hidden.value) {
+      return;
+    }
+
+    openModalSrc(hidden.value, fieldId);
   }
 
   function openModalSrc(src, label) {
-    const img = document.getElementById('imgModal-img');
-    const lbl = document.getElementById('imgModal-label');
+
+    const img =
+      document.getElementById('imgModal-img');
+
+    const lbl =
+      document.getElementById('imgModal-label');
 
     if (img) img.src = src;
     if (lbl) lbl.textContent = label || '';
 
-    const m = getModal();
-    if (m) m.show();
-  }
+    const modal = getModal();
 
-  function buildPayload() {
-    return {
-      id: val('carga-id') || null,
-      vehiculo_id: val('vehiculo_id') || null,
-      conductor_id: val('conductor_id') || null,
-      fecha: val('fecha'),
-      litros: val('litros') || null,
-      precio_litro: val('precio_litro') || null,
-      total: val('total') || null,
-      odometro: val('odometro') || null,
-      imagen: val('imagen') || null,
-      ticket_imagen: val('ticket_imagen') || null,
-      tipo_combustible: val('tipo_combustible'),
-      observaciones: val('observaciones') || null
-    };
-  }
-
-  function save() {
-    calcTotal();
-
-    const p = buildPayload();
-
-    if (!p.vehiculo_id || !p.conductor_id || !p.fecha) {
-      alert('Por favor completa Vehículo, Conductor y Fecha.');
-      return;
+    if (modal) {
+      modal.show();
     }
-
-    if (!p.litros || !p.precio_litro) {
-      alert('Por favor ingresa Litros y Precio por Litro.');
-      return;
-    }
-
-    postJSON('/cargas-gasolina/guardar', p)
-      .then(resp => {
-        if (resp.ok) {
-          window.location.href = '/cargas-gasolina/editar/' + (resp.id || p.id);
-        } else {
-          alert('Error al guardar: ' + (resp.error || 'desconocido'));
-        }
-      })
-      .catch(err => alert('Error de red: ' + err));
   }
 
-  function deleteItem(id) {
-    if (!confirm('¿Eliminar esta carga? Esta acción no se puede deshacer.')) return;
-
-    postJSON('/cargas-gasolina/eliminar/' + id, {})
-      .then(resp => {
-        if (resp.ok) window.location.href = '/cargas-gasolina';
-        else alert('Error al eliminar: ' + (resp.error || 'desconocido'));
-      })
-      .catch(err => alert('Error de red: ' + err));
-  }
-
-function getGridRows(onlyVisible = false) {
-  const table = document.getElementById('cargas-grid');
-  if (!table || !table.tBodies.length) return [];
-
-  return Array.from(table.tBodies[0].rows)
-    .filter(tr => !onlyVisible || tr.style.display !== 'none')
-    .map(tr => {
-      const cells = tr.cells;
-      const txt = idx => (cells[idx] ? cells[idx].innerText.replace(/\s+/g, ' ').trim() : '');
-      const hasImg = idx => !!(cells[idx] && cells[idx].querySelector('img'));
-
-      return {
-        id: txt(0),
-        fecha: txt(1),
-        vehiculo: txt(2),
-        conductor: txt(3),
-        litros: txt(4),
-        precio: txt(5),
-        total: txt(6),
-        odometro: txt(7),
-        combustible: txt(8),
-        observaciones: txt(9),
-        imagen: hasImg(10) ? 'Sí' : 'No',
-        ticket: hasImg(11) ? 'Sí' : 'No'
-      };
-    });
-}
+  // =========================================================
+  // EXPORT / PRINT
+  // =========================================================
 
   function printList() {
-    const rows = getGridRows(true);
-
-
-    const win = window.open('', '_blank', 'width=1200,height=800');
-    if (!win) {
-      alert('El navegador bloqueó la ventana de impresión.');
-      return;
-    }
-
-    const tableRows = rows.map(r => `
-      <tr>
-        <td>${esc(r.id)}</td>
-        <td>${esc(r.fecha)}</td>
-        <td>${esc(r.vehiculo)}</td>
-        <td>${esc(r.conductor)}</td>
-        <td style="text-align:right">${esc(r.litros)}</td>
-        <td style="text-align:right">${esc(r.precio)}</td>
-        <td style="text-align:right">${esc(r.total)}</td>
-        <td style="text-align:right">${esc(r.odometro)}</td>
-        <td>${esc(r.combustible)}</td>
-        <td style="max-width:260px;white-space:normal">${esc(r.observaciones)}</td>
-      </tr>
-    `).join('');
-
-    win.document.write(`
-      <!doctype html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Listado de Cargas de Gasolina</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 20px; }
-          h2 { margin-bottom: 6px; }
-          .sub { margin-bottom: 18px; color: #555; }
-          table { width: 100%; border-collapse: collapse; font-size: 12px; }
-          th, td { border: 1px solid #333; padding: 6px; vertical-align: top; }
-          th { background: #f0f0f0; }
-        </style>
-      </head>
-      <body>
-        <h2>Listado de Cargas de Gasolina</h2>
-        <div class="sub">Generado desde el sistema</div>
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Fecha</th>
-              <th>Vehículo</th>
-              <th>Conductor</th>
-              <th>Litros</th>
-              <th>$/Litro</th>
-              <th>Total</th>
-              <th>Odómetro</th>
-              <th>Combustible</th>
-              <th>Observaciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${tableRows || '<tr><td colspan="10">Sin datos</td></tr>'}
-          </tbody>
-        </table>
-        <script>
-          window.onload = function() {
-            window.print();
-          };
-        </script>
-      </body>
-      </html>
-    `);
-    win.document.close();
+    window.print();
   }
-function filterByDate() {
-  const selected = document.getElementById('fecha_filtro')?.value || '';
-  const table = document.getElementById('cargas-grid');
-  if (!table || !table.tBodies.length) return;
 
-  Array.from(table.tBodies[0].rows).forEach(tr => {
-    const rowDate = tr.dataset.fecha || '';
-    const show = !selected || rowDate === selected;
-    tr.style.display = show ? '' : 'none';
-  });
-}
-
-function clearDateFilter() {
-  const input = document.getElementById('fecha_filtro');
-  if (input) input.value = '';
-  filterByDate();
-}
   function exportExcel() {
-    const rows = getGridRows(true);
-
-    const header = `
-      <tr>
-        <th>ID</th>
-        <th>Fecha</th>
-        <th>Vehículo</th>
-        <th>Conductor</th>
-        <th>Litros</th>
-        <th>$/Litro</th>
-        <th>Total</th>
-        <th>Odómetro</th>
-        <th>Combustible</th>
-        <th>Observaciones</th>
-      </tr>
-    `;
-
-    const body = rows.map(r => `
-      <tr>
-        <td>${esc(r.id)}</td>
-        <td>${esc(r.fecha)}</td>
-        <td>${esc(r.vehiculo)}</td>
-        <td>${esc(r.conductor)}</td>
-        <td>${esc(r.litros)}</td>
-        <td>${esc(r.precio)}</td>
-        <td>${esc(r.total)}</td>
-        <td>${esc(r.odometro)}</td>
-        <td>${esc(r.combustible)}</td>
-        <td>${esc(r.observaciones)}</td>
-      </tr>
-    `).join('');
-
-    const html = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office"
-            xmlns:x="urn:schemas-microsoft-com:office:excel"
-            xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta charset="utf-8">
-        <style>
-          table, th, td { border: 1px solid #333; border-collapse: collapse; }
-          th, td { padding: 6px; }
-          th { background: #f0f0f0; }
-        </style>
-      </head>
-      <body>
-        <table>
-          ${header}
-          ${body || '<tr><td colspan="10">Sin datos</td></tr>'}
-        </table>
-      </body>
-      </html>
-    `;
-
-    const blob = new Blob([html], {
-      type: 'application/vnd.ms-excel;charset=utf-8'
-    });
-
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'cargas_gasolina_listado.xls';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    alert('Exportación pendiente');
   }
+
+  // =========================================================
+  // INIT
+  // =========================================================
+
+  function initOdometerEvents() {
+    const odometroEl = document.getElementById('odometro');
+    if (!odometroEl) return;
+
+    odometroEl.addEventListener('input', () => calcDiffOdo());
+    odometroEl.addEventListener('keyup', () => calcDiffOdo());
+    odometroEl.addEventListener('change', () => calcDiffOdo(true));
+    odometroEl.addEventListener('blur', () => calcDiffOdo(true));
+  }
+
+  // El <script> está al final del <body> → el DOM ya existe.
+  // No usar DOMContentLoaded; ejecutar directamente.
+  (function() {
+    initOdometerEvents();
+    var sel = document.getElementById('vehiculo_id');
+    if (sel && sel.value) {
+      onVehiculoChange(sel.value);
+    }
+  })();
 
   return {
     calcTotal,
+    calcDiffOdo,
+    onVehiculoChange,
+    save,
+    delete: deleteItem,
     onFileSelected,
     clearImage,
     openModal,
     openModalSrc,
-    save,
-    delete: deleteItem,
     printList,
     exportExcel
   };
