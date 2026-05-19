@@ -24,6 +24,91 @@
     (string? x) (try (Double/parseDouble x) (catch Exception _ nil))
     :else nil))
 
+(defn- format-kpl [km litros]
+  (when (and (number? km)
+             (number? litros)
+             (pos? km)
+             (pos? litros))
+    (format "Kilómetros por litro: %.2f" (/ km litros))))
+
+(defn- format-rendimiento-porcentaje [actual target]
+  (when (number? actual)
+    (if (and (number? target) (pos? target))
+      (let [pct (* 100 (/ (- actual target) target))]
+        (format "Porcentaje rendimiento: %s%.2f%%"
+                (if (pos? pct) "+" "")
+                pct))
+      "Porcentaje rendimiento: N/D")))
+
+(defn- append-kpl-observaciones [observaciones texto]
+  (let [observaciones (str/trim (or observaciones ""))
+        texto-lower    (str/lower-case texto)
+        base-lower     (str/lower-case observaciones)]
+    (cond
+      (str/blank? observaciones)
+      texto
+
+      (and (str/includes? texto-lower "kilómetros por litro")
+           (str/includes? base-lower "kilómetros por litro"))
+      observaciones
+
+      (and (str/includes? texto-lower "porcentaje rendimiento")
+           (str/includes? base-lower "porcentaje rendimiento"))
+      observaciones
+
+      :else
+      (str observaciones " · " texto))))
+
+(defn- compute-kpl [current previous]
+  (if (and previous
+           (number? (:odometro current))
+           (number? (:odometro previous))
+           (number? (:litros current))
+           (pos? (:litros current))
+           (> (:odometro current) (:odometro previous)))
+    (let [km        (- (:odometro current) (:odometro previous))
+          actual    (/ km (:litros current))
+          pct       (when (and (number? (:vehiculo_rendimientoxkm current))
+                               (pos? (:vehiculo_rendimientoxkm current)))
+                      (* 100 (/ (- actual (:vehiculo_rendimientoxkm current))
+                                (:vehiculo_rendimientoxkm current))))
+          kpl-text  (format-kpl km (:litros current))
+          perf-text (format-rendimiento-porcentaje actual (:vehiculo_rendimientoxkm current))
+          textos    (remove nil? [kpl-text perf-text])]
+      (cond-> current
+        true (assoc :rendimiento_p_km actual
+                    :porcentaje_rendimiento pct)
+        (seq textos) (assoc :observaciones
+                             (reduce append-kpl-observaciones (:observaciones current) textos))))
+    current))
+
+(defn- with-kpl-list [rows]
+  (let [rows-by-vehiculo (group-by :vehiculo_id rows)
+        computed (reduce
+                   (fn [acc [_ vehiculo-rows]]
+                     (let [sorted (sort #(let [date-a (or (:fecha %1) "")
+                                               date-b (or (:fecha %2) "")
+                                               cmp (compare date-b date-a)]
+                                           (if (zero? cmp)
+                                             (compare (:id %2) (:id %1))
+                                             cmp))
+                                         vehiculo-rows)
+                           annotated (map (fn [current previous]
+                                            (or (compute-kpl current previous) current))
+                                          sorted
+                                          (concat (rest sorted) [nil]))]
+                       (into acc annotated)))
+                   []
+                   rows-by-vehiculo)]
+    (let [rows-by-id (into {} (map (fn [row] [(:id row) row]) computed))]
+      (mapv #(get rows-by-id (:id %) %) rows))))
+
+(defn- with-kpl-single [carga]
+  (if (and carga (:vehiculo_id carga))
+    (let [ultimo (model/get-ultimo-odometro (:vehiculo_id carga) (:id carga))]
+      (or (compute-kpl carga ultimo) carga))
+    carga))
+
 (defn- normalize-body [body]
   {:vehiculo_id      (parse-int (:vehiculo_id body))
    :conductor_id     (parse-int (:conductor_id body))
@@ -108,6 +193,8 @@
                        (model/get-all)
                        (model/get-by-vehiculo vehiculo-id))
 
+        lista0       (with-kpl-list lista0)
+
         lista        (if (and (not (str/blank? (or fecha-inicio "")))
                               (not (str/blank? (or fecha-fin ""))))
                        (filter (fn [c]
@@ -129,7 +216,7 @@
 
 (defn editar [request]
   (let [id          (get-in request [:params :id])
-        carga       (model/get-by-id id)
+        carga       (with-kpl-single (model/get-by-id id))
         vehiculos   (model/get-vehiculos)
         conductores (model/get-conductores)
         ok          (get-session-id request)

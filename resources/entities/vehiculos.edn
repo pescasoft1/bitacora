@@ -11,29 +11,29 @@
  :connection :default
  :rights ["U" "A" "S"]  ;; User levels: U=User, A=Admin, S=System
  :mode :parameter-driven
-  :menu-category :Catalogos
+ :menu-category :Catalogos
  :menu-icon "bi bi-car-front"
  ;; Fields auto-detected from database schema
- :fields [
-          {:id :id :label "ID" :type :hidden}
+ :fields [{:id :id :label "ID" :type :hidden}
           {:id :nombre :label "Nombre" :type :text :required? true :placeholder "Nombre..."}
           {:id :placa :label "Placa" :type :text :placeholder "Placa..."}
           {:id :modelo :label "Modelo" :type :text :placeholder "Modelo..."}
           {:id :anio :label "Anio" :type :number}
           {:id :activo :label "Activo" :type :number}
+          {:id :rendimientoxkm :label "Rendimiento p/km" :type :decimal}
           {:id :fecha_registro :label "Fecha Registro" :type :hidden}]
- 
+
  ;; Auto-generated queries (customize as needed)
  :queries {:list "SELECT * FROM vehiculos ORDER BY id DESC"
            :get "SELECT * FROM vehiculos WHERE id = ?"}
- 
+
  ;; Available actions
  :actions {:new true :edit true :delete true}
- 
+
  ;; Enable audit trail (tracks who created/modified and when)
  ;; Uncomment to enable:
  ;; :audit? true
- 
+
  ;; Lifecycle hooks for business logic
  ;; Senior developer: Implement these in src/bitacora/hooks/vehiculos.clj
  ;; Uncomment and implement as needed:
@@ -43,10 +43,9 @@
  ;;         :after-save :bitacora.hooks.vehiculos/after-save
  ;;         :before-delete :bitacora.hooks.vehiculos/before-delete
  ;;         :after-delete :bitacora.hooks.vehiculos/after-delete}
- 
+
  ;; Subgrids for related tables (auto-detected)
- :subgrids [
-            {:entity :cargas_gasolina
+ :subgrids [{:entity :cargas_gasolina
              :title "Cargas Gasolina"
              :foreign-key :vehiculo_id
              :icon "bi bi-list-ul"

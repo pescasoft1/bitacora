@@ -7,7 +7,8 @@
    Example: src/bitacora/hooks/alquileres.clj
    
    Uncomment the hooks you need and implement the logic."
-  (:require [bitacora.models.util :refer [image-link]]))
+  (:require [clojure.string :as str]
+            [bitacora.models.util :refer [image-link]]))
 
 ;; =============================================================================
 ;; Validators
@@ -53,6 +54,58 @@
   (println "[INFO] Loading cargas_gasolina with params:" params)
   params)
 
+(defn- format-kilometros-por-litro
+  [km litros]
+  (when (and (number? km)
+             (number? litros)
+             (pos? km)
+             (pos? litros))
+    (format "Kilómetros por litro: %.2f" (/ km litros))))
+
+(defn- append-observaciones
+  [observaciones texto]
+  (let [observaciones (str/trim (or observaciones ""))]
+    (if (str/blank? observaciones)
+      texto
+      (if (str/includes? (str/lower-case observaciones) "kilómetros por litro")
+        observaciones
+        (str observaciones " · " texto)))))
+
+(defn- add-kpl-observaciones
+  "Adds km/l observation to the latest record of a vehicle when a prior record exists."
+  [rows]
+  (let [by-vehiculo (group-by :vehiculo_id rows)
+        computed (reduce
+                   (fn [acc [vehiculo-id vehiculo-rows]]
+                     (let [sorted-rows (sort #(let [date-a (or (:fecha %1) "")
+                                                   date-b (or (:fecha %2) "")
+                                                   cmp (compare date-b date-a)]
+                                               (if (zero? cmp)
+                                                 (compare (:id %2) (:id %1))
+                                                 cmp))
+                                             vehiculo-rows)
+                           annotated (map (fn [current previous]
+                                            (if (and previous
+                                                     (number? (:odometro current))
+                                                     (number? (:odometro previous))
+                                                     (number? (:litros current))
+                                                     (pos? (:litros current))
+                                                     (> (:odometro current) (:odometro previous)))
+                                              (let [km (- (:odometro current) (:odometro previous))
+                                                    texto (format-kilometros-por-litro km (:litros current))]
+                                                (if texto
+                                                  (assoc current :observaciones
+                                                         (append-observaciones (:observaciones current) texto))
+                                                  current))
+                                              current))
+                                          sorted-rows
+                                          (concat (rest sorted-rows) [nil]))]
+                       (into acc annotated)))
+                   []
+                   by-vehiculo)]
+    (let [rows-by-id (into {} (map (fn [row] [(:id row) row]) computed))]
+      (mapv #(get rows-by-id (:id %) %) rows))))
+
 (defn after-load
   "Hook executed after loading records.
    
@@ -65,10 +118,11 @@
    Returns: Modified rows vector"
   [rows params]
   (println "[INFO] Loaded" (count rows) "cargas_gasolina record(s)")
-  ;; Transform file fields to image links
-  (map #(-> %
-            (assoc :imagen (image-link (:imagen %)))
-            ) rows))
+  ;; Transform file fields to image links and add computed km/l observations
+  (->> rows
+       (map #(-> %
+                 (assoc :imagen (image-link (:imagen %)))))
+       (add-kpl-observaciones)))
 
 (defn before-save
   "Hook executed before saving a record.

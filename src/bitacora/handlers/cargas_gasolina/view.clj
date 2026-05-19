@@ -26,6 +26,11 @@
 (defn- selected? [a b]
   (= (str a) (str b)))
 
+(defn- valid-image-src? [v]
+  (and (string? v)
+       (not (str/blank? v))
+       (not (str/starts-with? v "{"))))
+
 (defn- opt-combustible [val current]
   [:option {:value val :selected (selected? val current)} val])
 
@@ -105,7 +110,7 @@
      "✕"]]
 
    [:div {:id (str field-id "-preview") :class "mb-1"}
-    (when current-val
+    (when (and current-val (string? current-val) (not (str/blank? current-val)))
       [:img
        {:id      (str field-id "-thumb")
         :src     current-val
@@ -194,6 +199,8 @@
          [:th "$/Litro"]
          [:th "Total"]
          [:th "Odómetro"]
+         [:th "Rendimiento p/km"]
+         [:th "% Rendimiento"]
          [:th "Combustible"]
          [:th "Observaciones"]
          [:th "Imagen"]
@@ -201,7 +208,7 @@
          [:th "Acciones"]]]
        [:tbody
         (if (empty? lista)
-          [:tr [:td {:colSpan 13 :class "text-center text-muted"} "No hay cargas registradas."]]
+          [:tr [:td {:colSpan 15 :class "text-center text-muted"} "No hay cargas registradas."]]
           (for [c lista]
             [:tr {:data-id (str (:id c))
                   :data-fecha (when (:fecha c) (subs (str (:fecha c)) 0 10))
@@ -212,7 +219,9 @@
                   :data-total (str (or (:total c) ""))
                   :data-litros (str (or (:litros c) ""))
                   :data-precio (str (or (:precio_litro c) ""))
-                  :data-odometro (str (or (:odometro c) ""))}
+                  :data-odometro (str (or (:odometro c) ""))
+                  :data-rendimiento (str (or (:rendimiento_p_km c) ""))
+                  :data-porcentaje-rendimiento (str (or (:porcentaje_rendimiento c) ""))}
              [:td (:id c)]
              [:td (fmt-fecha (:fecha c))]
              [:td [:span.fw-semibold (or (:placa c) "—")] [:br] [:small.text-muted (or (:vehiculo_nombre c) "")]]
@@ -221,11 +230,17 @@
              [:td.text-end "$" (fmt-num (:precio_litro c) 2)]
              [:td.text-end.fw-bold "$" (fmt-num (:total c) 2)]
              [:td.text-end (when (:odometro c) (str (:odometro c) " km"))]
+             [:td.text-end (or (fmt-num (:rendimiento_p_km c) 2) "—")]
+             [:td.text-end
+              (if (some? (:porcentaje_rendimiento c))
+                (str (if (pos? (:porcentaje_rendimiento c)) "+" "")
+                     (fmt-num (:porcentaje_rendimiento c) 2) "%")
+                "—")]
              [:td [:span.badge.bg-secondary (or (:tipo_combustible c) "—")]]
              [:td.small.text-wrap {:style "max-width:260px;white-space:normal"}
               (or (:observaciones c) "—")]
              [:td.text-center
-              (if (:imagen c)
+              (if (valid-image-src? (:imagen c))
                 [:img.img-thumbnail
                  {:src     (:imagen c)
                   :style   "height:42px;width:42px;object-fit:cover;cursor:zoom-in"
@@ -233,7 +248,7 @@
                   :title   "Ver imagen"}]
                 [:span.text-muted "—"])]
              [:td.text-center
-              (if (:ticket_imagen c)
+              (if (valid-image-src? (:ticket_imagen c))
                 [:img.img-thumbnail
                  {:src     (:ticket_imagen c)
                   :style   "height:42px;width:42px;object-fit:cover;cursor:zoom-in"
@@ -247,7 +262,7 @@
                (btn-del (:id c))]]]))]]]
 
      (image-modal)
-     [:script {:src "/js/cargas-gasolina.js"}]]))
+      [:script {:src "/js/cargas-gasolina.js?v=2"}]]))
 
 ;; ─────────────────────────────────────────
 ;; Edit / Nuevo
@@ -350,8 +365,8 @@
           :value (or (:odometro carga) "")
           :oninput "CargasGasolina.calcDiffOdo()"
           :onkeyup "CargasGasolina.calcDiffOdo()"
-          :onchange "CargasGasolina.calcDiffOdo(true)"
-          :onblur "CargasGasolina.calcDiffOdo(true)"}]
+           :onchange "CargasGasolina.validateOdometerFromServer()"
+           :onblur "CargasGasolina.validateOdometerFromServer()"}]
 
          [:div#odo-error-msg
           {:style "display:none;color:#dc3545;font-size:.82rem;font-weight:600;margin-top:4px"}]
@@ -397,7 +412,7 @@
 
      (image-modal)
 
-     [:script {:src "/js/cargas-gasolina.js"}]]))
+     [:script {:src "/js/cargas-gasolina.js?v=2"}]]))
 
 ;; ─────────────────────────────────────────
 ;; Print / Ver
@@ -431,7 +446,7 @@
      [:div.mb-3 [:strong "Observaciones: "] (:observaciones carga)])
 
    [:div.row
-    (when (:imagen carga)
+    (when (valid-image-src? (:imagen carga))
       [:div.col-md-6.mb-3
        [:p.fw-semibold "Foto/Imagen del Odometro:"]
        [:img.img-fluid
@@ -440,7 +455,7 @@
          :onclick (str "CargasGasolina.openModalSrc('" (:imagen carga) "','Imagen de la Carga')")
          :title   "Click para ver en grande"}]])
 
-    (when (:ticket_imagen carga)
+    (when (valid-image-src? (:ticket_imagen carga))
       [:div.col-md-6.mb-3
        [:p.fw-semibold "Foto/Imagen del Ticket:"]
        [:img.img-fluid
@@ -452,4 +467,4 @@
    (image-modal)
 
    [:button.btn.btn-primary.mt-3.d-print-none {:onclick "window.print()"} "🖨 Imprimir"]
-   [:script {:src "/js/cargas-gasolina.js"}]])
+   [:script {:src "/js/cargas-gasolina.js?v=2"}]])

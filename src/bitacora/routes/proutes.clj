@@ -13,6 +13,7 @@
   (GET  "/cargas-gasolina/nuevo"        request (cargas-gasolina/nuevo request))
   (GET  "/cargas-gasolina/editar/:id"   request (cargas-gasolina/editar request))
   (GET  "/cargas-gasolina/ver/:id"      request (cargas-gasolina/ver request))
+  (GET  "/cargas-gasolina/ultimo-odometro" request (cargas-gasolina/ultimo-odometro-vehiculo request))
   (POST "/cargas-gasolina/guardar"      request (cargas-gasolina/guardar request))
   (POST "/cargas-gasolina/eliminar/:id" request (cargas-gasolina/eliminar request))
   (POST "/cargas-gasolina/subir-imagen" req (cargas-gasolina/subir-imagen req))

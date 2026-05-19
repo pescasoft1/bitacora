@@ -298,7 +298,7 @@ function calcDiffOdo(showValidation) {
   function save() {
 
     calcTotal();
-    calcDiffOdo();
+    calcDiffOdo(true);
 
     const antEl = document.getElementById('odo-ant-val');
 
@@ -482,6 +482,10 @@ function calcDiffOdo(showValidation) {
   }
 
   function openModalSrc(src, label) {
+    if (!src || typeof src !== 'string' || src.trim().startsWith('{')) {
+      console.error('openModalSrc recibido src inválido:', src);
+      return;
+    }
 
     const img =
       document.getElementById('imgModal-img');
@@ -507,13 +511,182 @@ function calcDiffOdo(showValidation) {
     window.print();
   }
 
+  function esc(text) {
+    if (text === null || text === undefined) {
+      return '';
+    }
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function exportExcel() {
-    alert('Exportación pendiente');
+    const table = document.getElementById('cargas-grid');
+    if (!table) {
+      alert('No se encontró la tabla de cargas para exportar.');
+      return;
+    }
+
+    const headers = [
+      'ID',
+      'Fecha',
+      'Vehículo',
+      'Conductor',
+      'Litros',
+      '$/Litro',
+      'Total',
+      'Odómetro',
+      'Rendimiento p/km',
+      '% Rendimiento',
+      'Combustible',
+      'Observaciones'
+    ];
+
+    const rows = Array.from(table.querySelectorAll('tbody tr'))
+      .map(row => {
+        const cells = Array.from(row.querySelectorAll('td')).slice(0, 12);
+        return `
+          <tr>
+            ${cells.map(cell => `<td>${esc(cell.textContent.trim())}</td>`).join('')}
+          </tr>
+        `;
+      })
+      .join('');
+
+    const body = rows || `
+      <tr>
+        <td colspan="12">Sin datos</td>
+      </tr>
+    `;
+
+    const html = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office"
+            xmlns:x="urn:schemas-microsoft-com:office:excel"
+            xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <style>
+          table, th, td { border: 1px solid #333; border-collapse: collapse; }
+          th, td { padding: 6px; }
+          th { background: #f0f0f0; }
+        </style>
+      </head>
+      <body>
+        <table>
+          <tr>${headers.map(h => `<th>${esc(h)}</th>`).join('')}</tr>
+          ${body}
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([html], {
+      type: 'application/vnd.ms-excel;charset=utf-8'
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'cargas_gasolina_listado.xls';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   // =========================================================
   // INIT
   // =========================================================
+
+  function validateOdometerFromServer() {
+    const vehiculoId = val('vehiculo_id');
+    const cargaId = val('carga-id');
+    const odometroRaw = val('odometro');
+    const inputEl = document.getElementById('odometro');
+    const diffRow = document.getElementById('odo-diff-row');
+    const diffVal = document.getElementById('odo-diff-val');
+    const errorMsg = document.getElementById('odo-error-msg');
+
+    if (!inputEl) {
+      return;
+    }
+
+    const odAct = parseIntSafe(odometroRaw);
+    if (isNaN(odAct)) {
+      calcDiffOdo(true);
+      return;
+    }
+
+    if (!vehiculoId) {
+      calcDiffOdo(true);
+      return;
+    }
+
+    let url = '/cargas-gasolina/ultimo-odometro?vehiculo_id=' + encodeURIComponent(vehiculoId);
+    if (cargaId) {
+      url += '&excluir_id=' + encodeURIComponent(cargaId);
+    }
+
+    fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'X-CSRF-Token': csrf()
+      }
+    })
+      .then(r => r.json())
+      .then(resp => {
+        if (!resp.ok) {
+          calcDiffOdo(true);
+          return;
+        }
+
+        const odAnt = parseIntSafe(resp.odometro);
+        if (!isNaN(odAnt)) {
+          const antEl = document.getElementById('odo-ant-val');
+          const antInput = document.getElementById('odo-ant-input');
+          if (antEl) {
+            antEl.value = String(odAnt);
+            antEl.dataset.odoAnt = String(odAnt);
+          }
+          if (antInput) {
+            antInput.value = 'Último odómetro: ' + odAnt.toLocaleString() + ' km';
+          }
+        }
+
+        const diff = odAct - odAnt;
+        if (!isNaN(odAnt) && diff <= 0) {
+          if (diffVal) {
+            diffVal.textContent = (diff === 0 ? '0 km' : diff.toLocaleString() + ' km');
+          }
+          if (diffRow) {
+            diffRow.style.color = '#dc3545';
+          }
+          if (errorMsg) {
+            errorMsg.textContent = '⚠ El odómetro ingresado debe ser mayor al anterior';
+            errorMsg.style.display = 'block';
+          }
+          inputEl.classList.add('is-invalid');
+          inputEl.classList.remove('is-valid');
+          if (inputEl.setCustomValidity) {
+            inputEl.setCustomValidity('El odómetro ingresado debe ser mayor al anterior.');
+          }
+          if (inputEl.reportValidity) {
+            inputEl.reportValidity();
+          }
+          return;
+        }
+
+        calcDiffOdo(true);
+      })
+      .catch(err => {
+        console.error('ERROR VALIDANDO ODOMETRO:', err);
+        calcDiffOdo(true);
+      });
+  }
 
   function initOdometerEvents() {
     const odometroEl = document.getElementById('odometro');
@@ -521,8 +694,8 @@ function calcDiffOdo(showValidation) {
 
     odometroEl.addEventListener('input', () => calcDiffOdo());
     odometroEl.addEventListener('keyup', () => calcDiffOdo());
-    odometroEl.addEventListener('change', () => calcDiffOdo(true));
-    odometroEl.addEventListener('blur', () => calcDiffOdo(true));
+    odometroEl.addEventListener('change', () => validateOdometerFromServer());
+    odometroEl.addEventListener('blur', () => validateOdometerFromServer());
   }
 
   // El <script> está al final del <body> → el DOM ya existe.
@@ -535,9 +708,10 @@ function calcDiffOdo(showValidation) {
     }
   })();
 
-  return {
+  const exports = {
     calcTotal,
     calcDiffOdo,
+    validateOdometerFromServer,
     onVehiculoChange,
     save,
     delete: deleteItem,
@@ -548,5 +722,11 @@ function calcDiffOdo(showValidation) {
     printList,
     exportExcel
   };
+
+  if (typeof window !== 'undefined') {
+    window.CargasGasolina = exports;
+  }
+
+  return exports;
 
 })();

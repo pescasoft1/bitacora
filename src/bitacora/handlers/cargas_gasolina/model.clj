@@ -17,8 +17,7 @@
 
 (defn get-all []
   (Query db [(str "SELECT c.*,"
-                  "       v.nombre AS vehiculo_nombre, v.placa, v.modelo,"
-                  "       d.nombre AS conductor_nombre"
+                  "       v.nombre AS vehiculo_nombre, v.placa, v.modelo,"                  "       v.rendimientoxkm AS vehiculo_rendimientoxkm,"                  "       d.nombre AS conductor_nombre"
                   " FROM cargas_gasolina c"
                   " JOIN vehiculos   v ON v.id = c.vehiculo_id"
                   " JOIN conductores d ON d.id = c.conductor_id"
@@ -28,6 +27,7 @@
   (first
    (Query db [(str "SELECT c.*,"
                    "       v.nombre AS vehiculo_nombre, v.placa, v.modelo,"
+                   "       v.rendimientoxkm AS vehiculo_rendimientoxkm,"
                    "       d.nombre AS conductor_nombre"
                    " FROM cargas_gasolina c"
                    " JOIN vehiculos   v ON v.id = c.vehiculo_id"
@@ -38,6 +38,7 @@
 (defn get-by-vehiculo [vehiculo-id]
   (Query db [(str "SELECT c.*,"
                   "       v.nombre AS vehiculo_nombre, v.placa,"
+                  "       v.rendimientoxkm AS vehiculo_rendimientoxkm,"
                   "       d.nombre AS conductor_nombre"
                   " FROM cargas_gasolina c"
                   " JOIN vehiculos   v ON v.id = c.vehiculo_id"
