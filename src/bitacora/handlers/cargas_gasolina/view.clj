@@ -55,6 +55,28 @@
        {:src ""
         :style "max-width:100%;max-height:80vh;object-fit:contain;border-radius:4px"}]]]]])
 
+(defn- camera-modal []
+  [:div#cameraModal.modal.fade
+   {:tabindex "-1" :aria-hidden "true"}
+   [:div.modal-dialog.modal-dialog-centered.modal-lg
+    [:div.modal-content
+     [:div.modal-header
+      [:h5#cameraModal-label.modal-title "Tomar foto"]
+      [:button.btn-close
+       {:type "button" :data-bs-dismiss "modal"}]]
+     [:div.modal-body
+      [:video#cameraModal-video
+       {:autoplay true
+        :playsinline true
+        :muted true
+        :style "width:100%;max-height:65vh;object-fit:contain;background:#111;border-radius:4px"}]
+      [:canvas#cameraModal-canvas.d-none]]
+     [:div.modal-footer
+      [:button.btn.btn-outline-secondary
+       {:type "button" :data-bs-dismiss "modal"} "Cancelar"]
+      [:button.btn.btn-primary
+       {:type "button" :onclick "CargasGasolina.captureCameraPhoto()"} "Tomar foto"]]]]])
+
 ;; ─────────────────────────────────────────
 ;; Campo de imagen
 ;; ─────────────────────────────────────────
@@ -67,9 +89,15 @@
    [:input {:type     "file"
             :id       (str field-id "-file")
             :accept   "image/*"
-            :capture  "environment"
             :class    "d-none"
             :onchange (str "CargasGasolina.onFileSelected('" field-id "')")}]
+
+   [:input {:type     "file"
+            :id       (str field-id "-camera")
+            :accept   "image/*"
+            :capture  "environment"
+            :class    "d-none"
+            :onchange (str "CargasGasolina.onFileSelected('" field-id "', 'camera')")}]
 
    [:div.input-group.mb-2
     [:input.form-control.form-control-sm
@@ -90,7 +118,7 @@
     [:button.btn.btn-sm.btn-outline-primary
      {:type    "button"
       :title   "Tomar foto"
-      :onclick (str "document.getElementById('" field-id "-file').click()")}
+      :onclick (str "CargasGasolina.openCamera('" field-id "')")}
      "📷"]
 
     [:button.btn.btn-sm.btn-outline-primary
@@ -262,7 +290,7 @@
                (btn-del (:id c))]]]))]]]
 
      (image-modal)
-      [:script {:src "/js/cargas-gasolina.js?v=2"}]]))
+      [:script {:src "/js/cargas-gasolina.js?v=5"}]]))
 
 ;; ─────────────────────────────────────────
 ;; Edit / Nuevo
@@ -411,8 +439,9 @@
           (or (:observaciones carga) "")]]]]]
 
      (image-modal)
+     (camera-modal)
 
-     [:script {:src "/js/cargas-gasolina.js?v=2"}]]))
+     [:script {:src "/js/cargas-gasolina.js?v=5"}]]))
 
 ;; ─────────────────────────────────────────
 ;; Print / Ver
@@ -467,4 +496,4 @@
    (image-modal)
 
    [:button.btn.btn-primary.mt-3.d-print-none {:onclick "window.print()"} "🖨 Imprimir"]
-   [:script {:src "/js/cargas-gasolina.js?v=2"}]])
+   [:script {:src "/js/cargas-gasolina.js?v=5"}]])

@@ -99,3 +99,19 @@
  ;; --- File Upload Settings ---
  :max-upload-mb 5
  :allowed-image-exts ["jpg" "jpeg" "png" "gif" "bmp" "webp"]}
+
+ ;; --- Company Info (bilingual) ---
+  :company {:name {:es "BAZAR DURAN" :en "BAZAR DURAN"}
+            :address {:es "Calz. de las Americas número 613 Cuatemoc Norte, Mexicali, Mexico" :en "Calz. de las Americas número 613 Cuatemoc Norte, Mexicali, Mexico"}
+            :phone {:es "52 1 686 149 3404" :en "+52 1 686 149 3404"}
+            :email {:es "ic.paulinfd@hotmail.com" :en "ic.paulinfd@hotmail.com"}
+            :website {:es "www.BAZARDURAN.com" :en "www.BAZARDURAN.com"}
+            :rfc "BADU123456ABC"
+            :notes {:es "Precio sujeto a cambios sin previo aviso. Servicio garantizado por 30 días."
+                    :en "Price subject to changes without prior notice. Service guaranteed for 30 days."}}}
+;; --- Email Settings ---
+ :email-host "change_me" ; smtp.provider.com
+ :email-port 465
+ :email-user "change_me" ; joeblo@server.com
+ :email-passwd "change_me" ; The email provider password
+ :email-ssl true}

@@ -7,7 +7,7 @@ CREATE TABLE servicios_vehiculo (
     reparecion TEXT,
     monto REAL NOT NULL,
     fecha TEXT NOT NULL,
-    image text,
+    imagen text,
     fecha_registro text default (datetime('now')),
     FOREIGN KEY (vehiculo_id) REFERENCES vehiculos(id),
     FOREIGN KEY (conductor_id) REFERENCES conductores(id),

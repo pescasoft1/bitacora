@@ -52,6 +52,39 @@
        {:src ""
         :style "max-width:100%;max-height:80vh;object-fit:contain;border-radius:4px"}]]]]])
 
+(defn- camera-modal []
+  [:div#cameraModal.modal.fade
+   {:tabindex "-1"
+    :aria-hidden "true"}
+
+   [:div.modal-dialog.modal-dialog-centered.modal-lg
+
+    [:div.modal-content
+
+     [:div.modal-header
+      [:h5#cameraModal-label.modal-title "Tomar foto"]
+      [:button.btn-close
+       {:type "button"
+        :data-bs-dismiss "modal"}]]
+
+     [:div.modal-body
+      [:video#cameraModal-video
+       {:autoplay true
+        :playsinline true
+        :muted true
+        :style "width:100%;max-height:65vh;object-fit:contain;background:#111;border-radius:4px"}]
+      [:canvas#cameraModal-canvas.d-none]]
+
+     [:div.modal-footer
+      [:button.btn.btn-outline-secondary
+       {:type "button"
+        :data-bs-dismiss "modal"}
+       "Cancelar"]
+      [:button.btn.btn-primary
+       {:type "button"
+        :onclick "ServiciosVehiculo.captureCameraPhoto()"}
+       "Tomar foto"]]]]])
+
 ;; ─────────────────────────────────────────
 ;; Campo Imagen
 ;; ─────────────────────────────────────────
@@ -74,6 +107,14 @@
      :class "d-none"
      :onchange (str "ServiciosVehiculo.onFileSelected('" field-id "')")}]
 
+   [:input
+    {:type "file"
+     :id (str field-id "-camera")
+     :accept "image/*"
+     :capture "environment"
+     :class "d-none"
+     :onchange (str "ServiciosVehiculo.onFileSelected('" field-id "', 'camera')")}]
+
    [:div.input-group.mb-2
 
     [:input.form-control.form-control-sm
@@ -89,6 +130,12 @@
      {:type "button"
       :onclick (str "document.getElementById('" field-id "-file').click()")}
      "📁"]
+
+    [:button.btn.btn-sm.btn-outline-primary
+     {:type "button"
+      :title "Tomar foto"
+      :onclick (str "ServiciosVehiculo.openCamera('" field-id "')")}
+     "📷"]
 
     [:button.btn.btn-sm.btn-outline-primary
      {:type "button"
@@ -262,12 +309,12 @@
 
              [:td.text-center
 
-              (if (:image s)
+              (if (:imagen s)
 
                 [:img.img-thumbnail
-                 {:src (:image s)
+                 {:src (:imagen s)
                   :style "height:42px;width:42px;object-fit:cover;cursor:pointer"
-                  :onclick (str "ServiciosVehiculo.openModalSrc('" (:image s) "','Servicio #" (:id s) "')")}]
+                  :onclick (str "ServiciosVehiculo.openModalSrc('" (:imagen s) "','Servicio #" (:id s) "')")}]
 
                 [:span.text-muted "—"])]
 
@@ -281,7 +328,7 @@
 
      (image-modal)
 
-     [:script {:src "/js/servicios-vehiculo.js"}]]))
+     [:script {:src "/js/servicios-vehiculo.js?v=2"}]]))
 
 ;; ─────────────────────────────────────────
 ;; EDITAR / NUEVO
@@ -409,9 +456,9 @@
            :value (or (fmt-num (:monto servicio) 2) "")}]]
 
         ;; Imagen
-        (image-field "image"
+        (image-field "imagen"
                      "Foto/Imagen Recibo del Servicio"
-                     (:image servicio))
+                     (:imagen servicio))
 
         ;; Observaciones
         [:div.col-12
@@ -424,8 +471,9 @@
           (or (:reparacion servicio) "")]]]]]
 
      (image-modal)
+     (camera-modal)
 
-     [:script {:src "/js/servicios-vehiculo.js"}]]))
+     [:script {:src "/js/servicios-vehiculo.js?v=2"}]]))
 
 ;; ─────────────────────────────────────────
 ;; PRINT
@@ -501,16 +549,16 @@
    ;; Imagen
    [:div.row
 
-    (when (:image servicio)
+    (when (:imagen servicio)
 
       [:div.col-md-6.mb-3
 
        [:p.fw-semibold "Foto/Imagen Recibo del Servicio"]
 
        [:img.img-fluid
-        {:src (:image servicio)
+        {:src (:imagen servicio)
          :style "max-height:280px;object-fit:contain;border:1px solid #ccc;border-radius:4px;cursor:pointer"
-         :onclick (str "ServiciosVehiculo.openModalSrc('" (:image servicio) "','Foto/Imagen Recibo del Servicio')")}]])]
+         :onclick (str "ServiciosVehiculo.openModalSrc('" (:imagen servicio) "','Foto/Imagen Recibo del Servicio')")}]])]
 
    (image-modal)
 
@@ -518,4 +566,4 @@
     {:onclick "window.print()"}
     "🖨 Imprimir"]
 
-   [:script {:src "/js/servicios-vehiculo.js"}]])
+   [:script {:src "/js/servicios-vehiculo.js?v=2"}]])

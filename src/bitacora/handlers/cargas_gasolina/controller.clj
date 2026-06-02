@@ -155,21 +155,29 @@
       :else
       {:ok true})))
 
+(defn- req-param [request k]
+  (or (get-in request [:params k])
+      (get-in request [:params (name k)])
+      (get-in request [:multipart-params k])
+      (get-in request [:multipart-params (name k)])))
+
 (defn subir-imagen [request]
   (try
-    (let [file (or (get-in request [:params :foto])
-                   (get-in request [:multipart-params :foto]))]
+    (let [file (req-param request :foto)]
 
       (when-not file
         (throw (ex-info "No se recibió archivo." {})))
 
-      (let [temp     (:tempfile file)
-            original (:filename file)
-            ext      (or (some-> original (re-find #"\.[A-Za-z0-9]+$")) ".jpg")
+      (let [temp     (or (:tempfile file) (get file "tempfile"))
+            original (or (:filename file) (get file "filename"))
+            ext      (or (when original (re-find #"\.[A-Za-z0-9]+$" original)) ".jpg")
             nombre   (str (java.util.UUID/randomUUID) ext)
             dir      (io/file "resources/public/uploads/cargas-gasolina")
             _        (.mkdirs dir)
             destino  (io/file dir nombre)]
+
+        (when-not temp
+          (throw (ex-info "No se recibió archivo temporal." {})))
 
         (io/copy temp destino)
 

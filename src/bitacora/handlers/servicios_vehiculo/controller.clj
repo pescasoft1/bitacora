@@ -25,7 +25,7 @@
    :reparacion       (:reparacion body)
    :monto            (parse-dbl (:monto body))
    :fecha            (:fecha body)
-   :imagen            (:imagen body)})
+   :imagen          (:imagen body)})
 
 (defn- json-ok
   ([]      {:status 200 :headers {"Content-Type" "application/json"} :body (json/write-str {:ok true})})

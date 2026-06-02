@@ -1,6 +1,10 @@
 const ServiciosVehiculo = (() => {
 
   let _modal = null;
+  let _cameraModal = null;
+  let _cameraStream = null;
+  let _cameraFieldId = null;
+  let _cameraModalBound = false;
 
   function getModal() {
     if (!_modal) {
@@ -10,6 +14,22 @@ const ServiciosVehiculo = (() => {
       }
     }
     return _modal;
+  }
+
+  function getCameraModal() {
+    const el = document.getElementById('cameraModal');
+    if (!el) return null;
+
+    if (!_cameraModalBound) {
+      el.addEventListener('hidden.bs.modal', stopCamera);
+      _cameraModalBound = true;
+    }
+
+    if (!_cameraModal && window.bootstrap) {
+      _cameraModal = new bootstrap.Modal(el);
+    }
+
+    return _cameraModal;
   }
 
   function csrf() {
@@ -42,8 +62,9 @@ const ServiciosVehiculo = (() => {
       .replace(/'/g, '&#39;');
   }
 
-  function onFileSelected(fieldId) {
-    const fileInput = document.getElementById(fieldId + '-file');
+  function onFileSelected(fieldId, source) {
+    const suffix = source === 'camera' ? '-camera' : '-file';
+    const fileInput = document.getElementById(fieldId + suffix);
     const file = fileInput && fileInput.files[0];
     if (!file) return;
 
@@ -90,6 +111,107 @@ const ServiciosVehiculo = (() => {
     reader.readAsDataURL(file);
   }
 
+  function applyImageValue(fieldId, src, displayName) {
+    const hidden = document.getElementById(fieldId);
+    if (hidden) hidden.value = src;
+
+    const display = document.getElementById(fieldId + '-display');
+    if (display) display.value = displayName || 'foto-camara.jpg';
+
+    const preview = document.getElementById(fieldId + '-preview');
+    if (preview) {
+      preview.innerHTML = '';
+
+      const thumb = document.createElement('img');
+      thumb.id = fieldId + '-thumb';
+      thumb.className = 'img-thumbnail';
+      thumb.style.cssText =
+        'max-height:90px;max-width:100%;object-fit:cover;' +
+        'cursor:zoom-in;border-radius:4px;display:block;margin-top:4px';
+      thumb.title = 'Click para ver en grande';
+      thumb.onclick = () => openModal(fieldId);
+      thumb.src = src;
+      preview.appendChild(thumb);
+    }
+
+    const clearBtn = document.getElementById(fieldId + '-clear');
+    if (clearBtn) clearBtn.style.display = 'inline-block';
+
+    const viewBtn = document.getElementById(fieldId + '-view');
+    if (viewBtn) viewBtn.disabled = false;
+  }
+
+  function stopCamera() {
+    if (_cameraStream) {
+      _cameraStream.getTracks().forEach(track => track.stop());
+      _cameraStream = null;
+    }
+
+    const video = document.getElementById('cameraModal-video');
+    if (video) video.srcObject = null;
+  }
+
+  async function openCamera(fieldId) {
+    _cameraFieldId = fieldId;
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const input = document.getElementById(fieldId + '-camera');
+      if (input) input.click();
+      return;
+    }
+
+    const modal = getCameraModal();
+    const video = document.getElementById('cameraModal-video');
+    const label = document.getElementById('cameraModal-label');
+
+    if (!modal || !video) {
+      const input = document.getElementById(fieldId + '-camera');
+      if (input) input.click();
+      return;
+    }
+
+    if (label) label.textContent = 'Tomar foto';
+
+    try {
+      stopCamera();
+      _cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false
+      });
+      video.srcObject = _cameraStream;
+      await video.play();
+      modal.show();
+    } catch (err) {
+      console.error('ERROR ABRIENDO CÁMARA:', err);
+      alert('No se pudo abrir la cámara. Revisa permisos del navegador o selecciona una imagen.');
+      const input = document.getElementById(fieldId + '-file');
+      if (input) input.click();
+    }
+  }
+
+  async function captureCameraPhoto() {
+    const fieldId = _cameraFieldId;
+    const video = document.getElementById('cameraModal-video');
+    const canvas = document.getElementById('cameraModal-canvas');
+
+    if (!fieldId || !video || !canvas || !video.videoWidth || !video.videoHeight) {
+      alert('La cámara todavía no está lista.');
+      return;
+    }
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const base64 = canvas.toDataURL('image/jpeg', 0.9);
+    const modal = getCameraModal();
+    if (modal) modal.hide();
+    stopCamera();
+    applyImageValue(fieldId, base64, 'foto-camara.jpg');
+  }
+
   function clearImage(fieldId) {
     const hidden = document.getElementById(fieldId);
     if (hidden) hidden.value = '';
@@ -102,6 +224,9 @@ const ServiciosVehiculo = (() => {
 
     const file = document.getElementById(fieldId + '-file');
     if (file) file.value = '';
+
+    const cameraInput = document.getElementById(fieldId + '-camera');
+    if (cameraInput) cameraInput.value = '';
 
     const preview = document.getElementById(fieldId + '-preview');
     if (preview) preview.innerHTML = '';
@@ -118,7 +243,7 @@ const ServiciosVehiculo = (() => {
     const src = hidden ? hidden.value : '';
     if (!src) return;
 
-    const label = fieldId === 'image' ? 'Imagen del Servicio' : 'Archivo';
+    const label = fieldId === 'imagen' ? 'Imagen del Servicio' : 'Archivo';
     openModalSrc(src, label);
   }
 
@@ -142,7 +267,7 @@ const ServiciosVehiculo = (() => {
       reparacion: val('reparacion') || null,
       monto: val('monto') || null,
       fecha: val('fecha'),
-      image: val('image') || null
+      imagen: val('imagen') || null
     };
   }
 
@@ -198,7 +323,7 @@ const ServiciosVehiculo = (() => {
         tipo: txt(4),
         reparacion: txt(5),
         monto: txt(6),
-        image: hasImg(7) ? 'Sí' : 'No'
+        imagen: hasImg(7) ? 'Sí' : 'No'
       };
     });
   }
@@ -333,6 +458,8 @@ const ServiciosVehiculo = (() => {
 
   return {
     onFileSelected,
+    openCamera,
+    captureCameraPhoto,
     clearImage,
     openModal,
     openModalSrc,

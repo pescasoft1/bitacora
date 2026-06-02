@@ -14,7 +14,7 @@
           {:id :lastname :label "Lastname" :type :text :placeholder "Lastname..."}
           {:id :firstname :label "Firstname" :type :text :placeholder "Firstname..."}
           {:id :username :label "Username" :type :text :placeholder "Username..."}
-          ; {:id :password :label "Password" :type :password}
+          {:id :password :label "Password" :type :password}
           {:id :dob :label "Dob" :type :date :placeholder "Dob..."}
           {:id :cell :label "Cell" :type :text :placeholder "Cell..."}
           {:id :phone :label "Phone" :type :text :placeholder "Phone..."}

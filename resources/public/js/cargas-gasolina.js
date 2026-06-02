@@ -1,6 +1,10 @@
 const CargasGasolina = (() => {
 
   let _modal = null;
+  let _cameraModal = null;
+  let _cameraStream = null;
+  let _cameraFieldId = null;
+  let _cameraModalBound = false;
 
   function getModal() {
     if (!_modal) {
@@ -10,6 +14,22 @@ const CargasGasolina = (() => {
       }
     }
     return _modal;
+  }
+
+  function getCameraModal() {
+    const el = document.getElementById('cameraModal');
+    if (!el) return null;
+
+    if (!_cameraModalBound) {
+      el.addEventListener('hidden.bs.modal', stopCamera);
+      _cameraModalBound = true;
+    }
+
+    if (!_cameraModal && window.bootstrap) {
+      _cameraModal = new bootstrap.Modal(el);
+    }
+
+    return _cameraModal;
   }
 
   function csrf() {
@@ -400,6 +420,7 @@ function calcDiffOdo(showValidation) {
     const display = document.getElementById(fieldId + '-display');
     const preview = document.getElementById(fieldId + '-preview');
     const fileInput = document.getElementById(fieldId + '-file');
+    const cameraInput = document.getElementById(fieldId + '-camera');
     const clearBtn = document.getElementById(fieldId + '-clear');
     const viewBtn = document.getElementById(fieldId + '-view');
 
@@ -407,67 +428,170 @@ function calcDiffOdo(showValidation) {
     if (display) display.value = '';
     if (preview) preview.innerHTML = '';
     if (fileInput) fileInput.value = '';
+    if (cameraInput) cameraInput.value = '';
     if (clearBtn) clearBtn.style.display = 'none';
     if (viewBtn) viewBtn.disabled = true;
   }
 
-  async function onFileSelected(fieldId) {
-  const fileInput = document.getElementById(fieldId + '-file');
-  const file = fileInput && fileInput.files[0];
-  if (!file) return;
+  async function onFileSelected(fieldId, source) {
+    const suffix = source === 'camera' ? '-camera' : '-file';
+    const fileInput = document.getElementById(fieldId + suffix);
+    const file = fileInput && fileInput.files[0];
+    if (!file) return;
 
-  if (!file.type || !file.type.startsWith('image/')) {
-    alert('Selecciona un archivo de imagen válido.');
-    fileInput.value = '';
-    return;
+    if (!file.type || !file.type.startsWith('image/')) {
+      alert('Selecciona un archivo de imagen válido.');
+      fileInput.value = '';
+      return;
+    }
+
+    await uploadImageFile(fieldId, file);
   }
 
-  const formData = new FormData();
-  formData.append('foto', file);
+  async function uploadImageFile(fieldId, file) {
+    if (!file) return;
 
-  const resp = await fetch('/cargas-gasolina/subir-imagen', {
-    method: 'POST',
-    headers: {
-      'X-CSRF-Token': csrf()
-    },
-    body: formData
-  });
+    const display = document.getElementById(fieldId + '-display');
+    if (display) display.value = 'Subiendo...';
 
-  const data = await resp.json();
+    const formData = new FormData();
+    formData.append('foto', file);
+    formData.append('__anti-forgery-token', csrf());
 
-  if (!data.ok) {
-    alert(data.error || 'No se pudo subir la foto.');
-    return;
+    let data;
+    try {
+      const resp = await fetch('/cargas-gasolina/subir-imagen', {
+        method: 'POST',
+        headers: {
+          'X-CSRF-Token': csrf(),
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: formData
+      });
+
+      data = await resp.json();
+
+      if (!resp.ok || !data.ok) {
+        alert(data.error || 'No se pudo subir la foto.');
+        return;
+      }
+    } catch (err) {
+      if (display) display.value = '';
+      alert('No se pudo subir la foto. Revisa la conexión o intenta con otra imagen.');
+      console.error('ERROR SUBIENDO FOTO:', err);
+      return;
+    }
+
+    const hidden = document.getElementById(fieldId);
+    if (hidden) hidden.value = data.url;
+
+    if (display) display.value = file.name;
+
+    const preview = document.getElementById(fieldId + '-preview');
+    if (preview) {
+      preview.innerHTML = '';
+
+      const thumb = document.createElement('img');
+      thumb.id = fieldId + '-thumb';
+      thumb.className = 'img-thumbnail';
+      thumb.style.cssText =
+        'max-height:90px;max-width:100%;object-fit:cover;' +
+        'cursor:zoom-in;border-radius:4px;display:block;margin-top:4px';
+      thumb.title = 'Click para ver en grande';
+      thumb.onclick = () => openModal(fieldId);
+      thumb.src = data.url;
+      preview.appendChild(thumb);
+    }
+
+    const clearBtn = document.getElementById(fieldId + '-clear');
+    if (clearBtn) clearBtn.style.display = 'inline-block';
+
+    const viewBtn = document.getElementById(fieldId + '-view');
+    if (viewBtn) viewBtn.disabled = false;
   }
 
-  const hidden = document.getElementById(fieldId);
-  if (hidden) hidden.value = data.url;
+  function stopCamera() {
+    if (_cameraStream) {
+      _cameraStream.getTracks().forEach(track => track.stop());
+      _cameraStream = null;
+    }
 
-  const display = document.getElementById(fieldId + '-display');
-  if (display) display.value = file.name;
-
-  const preview = document.getElementById(fieldId + '-preview');
-  if (preview) {
-    preview.innerHTML = '';
-
-    const thumb = document.createElement('img');
-    thumb.id = fieldId + '-thumb';
-    thumb.className = 'img-thumbnail';
-    thumb.style.cssText =
-      'max-height:90px;max-width:100%;object-fit:cover;' +
-      'cursor:zoom-in;border-radius:4px;display:block;margin-top:4px';
-    thumb.title = 'Click para ver en grande';
-    thumb.onclick = () => openModal(fieldId);
-    thumb.src = data.url;
-    preview.appendChild(thumb);
+    const video = document.getElementById('cameraModal-video');
+    if (video) video.srcObject = null;
   }
 
-  const clearBtn = document.getElementById(fieldId + '-clear');
-  if (clearBtn) clearBtn.style.display = 'inline-block';
+  async function openCamera(fieldId) {
+    _cameraFieldId = fieldId;
 
-  const viewBtn = document.getElementById(fieldId + '-view');
-  if (viewBtn) viewBtn.disabled = false;
-}
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const input = document.getElementById(fieldId + '-camera');
+      if (input) input.click();
+      return;
+    }
+
+    const modal = getCameraModal();
+    const video = document.getElementById('cameraModal-video');
+    const label = document.getElementById('cameraModal-label');
+
+    if (!modal || !video) {
+      const input = document.getElementById(fieldId + '-camera');
+      if (input) input.click();
+      return;
+    }
+
+    if (label) label.textContent = 'Tomar foto';
+
+    try {
+      stopCamera();
+      _cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false
+      });
+      video.srcObject = _cameraStream;
+      await video.play();
+      modal.show();
+    } catch (err) {
+      console.error('ERROR ABRIENDO CÁMARA:', err);
+      alert('No se pudo abrir la cámara. Revisa permisos del navegador o selecciona una imagen.');
+      const input = document.getElementById(fieldId + '-file');
+      if (input) input.click();
+    }
+  }
+
+  function canvasToBlob(canvas) {
+    return new Promise(resolve => {
+      canvas.toBlob(resolve, 'image/jpeg', 0.9);
+    });
+  }
+
+  async function captureCameraPhoto() {
+    const fieldId = _cameraFieldId;
+    const video = document.getElementById('cameraModal-video');
+    const canvas = document.getElementById('cameraModal-canvas');
+
+    if (!fieldId || !video || !canvas || !video.videoWidth || !video.videoHeight) {
+      alert('La cámara todavía no está lista.');
+      return;
+    }
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const blob = await canvasToBlob(canvas);
+    if (!blob) {
+      alert('No se pudo capturar la foto.');
+      return;
+    }
+
+    const file = new File([blob], 'foto-camara.jpg', { type: 'image/jpeg' });
+    const modal = getCameraModal();
+    if (modal) modal.hide();
+    stopCamera();
+    await uploadImageFile(fieldId, file);
+  }
 
   function openModal(fieldId) {
 
@@ -716,6 +840,8 @@ function calcDiffOdo(showValidation) {
     save,
     delete: deleteItem,
     onFileSelected,
+    openCamera,
+    captureCameraPhoto,
     clearImage,
     openModal,
     openModalSrc,

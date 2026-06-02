@@ -13,6 +13,7 @@
  :mode :parameter-driven
  :menu-category :transacciones
  :menu-icon "bi bi-card-checklist"
+ :menu-hidden? true
  :fields [{:id :id
            :label "ID"
            :type :hidden}
