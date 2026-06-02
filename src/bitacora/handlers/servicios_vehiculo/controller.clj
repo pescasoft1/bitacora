@@ -34,7 +34,7 @@
    :imagen          (:imagen body)})
 
 (defn- uploads-dir []
-  (doto (io/file (:uploads config))
+  (doto (io/file (:uploads config) "servicios")
     (.mkdirs)))
 
 (defn- upload-url [filename]
@@ -75,8 +75,7 @@
 
                    :else nil)
         candidates (when filename
-                     [(io/file (uploads-dir) filename)
-                      (io/file "resources/public/uploads" filename)])]
+                     [(io/file (uploads-dir) filename)])]
     (first (filter #(.exists %) candidates))))
 
 (defn- finalize-image! [src servicio-id]
