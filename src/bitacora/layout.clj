@@ -370,7 +370,7 @@
     js
     [:footer.bg-light.text-center.fixed-bottom.py-2.shadow-sm
      [:span "Copyright © "
-      (t/year (t/now)) " " (:company-name config) " - All Rights Reserved"]]]))
+      (t/year (t/now)) " " (:company-name config) " - All Rights Reserved Ver. 1.060126"]]]))
 
 (defn error-404
   ([msg] (error-404 msg nil))

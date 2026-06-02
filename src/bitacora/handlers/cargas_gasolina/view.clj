@@ -8,7 +8,7 @@
 ;; ─────────────────────────────────────────
 
 (defn- fmt-fecha [f]
-  (when f
+  (when (and f (not (str/blank? (str f))))
     (try
       (.format
        (java.time.LocalDate/parse (subs (str f) 0 10))
@@ -194,7 +194,7 @@
           {:type "date"
            :name "fecha_fin"
            :value (or fecha-fin "")}]]
-        
+
         [:div.col-md-4
          [:label.form-label.fw-semibold "Vehículo"]
          [:select.form-select
@@ -239,7 +239,7 @@
           [:tr [:td {:colSpan 15 :class "text-center text-muted"} "No hay cargas registradas."]]
           (for [c lista]
             [:tr {:data-id (str (:id c))
-                  :data-fecha (when (:fecha c) (subs (str (:fecha c)) 0 10))
+                  :data-fecha (when (and (:fecha c) (not (str/blank? (str (:fecha c))))) (subs (str (:fecha c)) 0 10))
                   :data-vehiculo (str/lower-case (str (or (:placa c) "") " " (or (:vehiculo_nombre c) "")))
                   :data-conductor (str/lower-case (str (or (:conductor_nombre c) "")))
                   :data-combustible (str/lower-case (str (or (:tipo_combustible c) "")))
@@ -290,7 +290,7 @@
                (btn-del (:id c))]]]))]]]
 
      (image-modal)
-      [:script {:src "/js/cargas-gasolina.js?v=5"}]]))
+     [:script {:src "/js/cargas-gasolina.js?v=6"}]]))
 
 ;; ─────────────────────────────────────────
 ;; Edit / Nuevo
@@ -330,8 +330,8 @@
 
         [:div.col-md-4
          [:label.form-label.fw-semibold "Vehículo"]
-        [:select#vehiculo_id.form-select
-         {:onchange "CargasGasolina.onVehiculoChange(this.value);CargasGasolina.calcDiffOdo();"}
+         [:select#vehiculo_id.form-select
+          {:onchange "CargasGasolina.onVehiculoChange(this.value);CargasGasolina.calcDiffOdo();"}
           [:option {:value ""} "-- Seleccionar --"]
           (for [v vehiculos]
             [:option {:value (:id v) :selected (selected? (:id v) (:vehiculo_id carga))}
@@ -349,7 +349,7 @@
          [:label.form-label.fw-semibold "Fecha"]
          [:input#fecha.form-control
           {:type "date"
-           :value (or (when (:fecha carga) (subs (str (:fecha carga)) 0 10)) "")}]]
+           :value (or (when (and (:fecha carga) (not (str/blank? (str (:fecha carga))))) (subs (str (:fecha carga)) 0 10)) "")}]]
 
         [:div.col-md-3
          [:label.form-label.fw-semibold "Tipo de Combustible"]
@@ -387,12 +387,12 @@
 
         [:div.col-md-4
          [:label.form-label.fw-semibold "Odómetro (km)"]
-        [:input#odometro.form-control
-         {:type "number"
-          :min "0"
-          :value (or (:odometro carga) "")
-          :oninput "CargasGasolina.calcDiffOdo()"
-          :onkeyup "CargasGasolina.calcDiffOdo()"
+         [:input#odometro.form-control
+          {:type "number"
+           :min "0"
+           :value (or (:odometro carga) "")
+           :oninput "CargasGasolina.calcDiffOdo()"
+           :onkeyup "CargasGasolina.calcDiffOdo()"
            :onchange "CargasGasolina.validateOdometerFromServer()"
            :onblur "CargasGasolina.validateOdometerFromServer()"}]
 
@@ -441,7 +441,7 @@
      (image-modal)
      (camera-modal)
 
-     [:script {:src "/js/cargas-gasolina.js?v=5"}]]))
+     [:script {:src "/js/cargas-gasolina.js?v=6"}]]))
 
 ;; ─────────────────────────────────────────
 ;; Print / Ver
@@ -496,4 +496,4 @@
    (image-modal)
 
    [:button.btn.btn-primary.mt-3.d-print-none {:onclick "window.print()"} "🖨 Imprimir"]
-   [:script {:src "/js/cargas-gasolina.js?v=5"}]])
+   [:script {:src "/js/cargas-gasolina.js?v=6"}]])

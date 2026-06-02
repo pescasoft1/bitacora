@@ -2,9 +2,15 @@
   (:require [bitacora.handlers.servicios_vehiculo.model :as model]
             [bitacora.handlers.servicios_vehiculo.view  :as view]
             [bitacora.layout :refer [application]]
+            [bitacora.models.crud :refer [config]]
             [bitacora.models.util :refer [get-session-id]]
             [clojure.data.json :as json]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [clojure.java.io :as io])
+  (:import [java.awt Color]
+           [java.awt.image BufferedImage]
+           [java.util Base64]
+           [javax.imageio ImageIO]))
 
 (defn- parse-int [x]
   (cond
@@ -26,6 +32,75 @@
    :monto            (parse-dbl (:monto body))
    :fecha            (:fecha body)
    :imagen          (:imagen body)})
+
+(defn- uploads-dir []
+  (doto (io/file (:uploads config))
+    (.mkdirs)))
+
+(defn- upload-url [filename]
+  (str (:path config) filename))
+
+(defn- data-url? [s]
+  (and (string? s) (str/starts-with? s "data:image/")))
+
+(defn- draw-jpg! [image target]
+  (when-not image
+    (throw (ex-info "No se pudo leer la imagen." {})))
+  (let [rgb (BufferedImage. (.getWidth image) (.getHeight image) BufferedImage/TYPE_INT_RGB)
+        g   (.createGraphics rgb)]
+    (try
+      (.setColor g Color/WHITE)
+      (.fillRect g 0 0 (.getWidth rgb) (.getHeight rgb))
+      (.drawImage g image 0 0 nil)
+      (ImageIO/write rgb "jpg" target)
+      (finally
+        (.dispose g)))))
+
+(defn- write-data-url-jpg! [src target]
+  (let [[_ payload] (str/split src #"," 2)
+        bytes (.decode (Base64/getDecoder) payload)]
+    (with-open [in (io/input-stream bytes)]
+      (draw-jpg! (ImageIO/read in) target))))
+
+(defn- upload-source-file [src]
+  (let [filename (cond
+                   (str/starts-with? src (:path config))
+                   (subs src (count (:path config)))
+
+                   (str/starts-with? src "/uploads/")
+                   (subs src (count "/uploads/"))
+
+                   (not (str/includes? src "/"))
+                   src
+
+                   :else nil)
+        candidates (when filename
+                     [(io/file (uploads-dir) filename)
+                      (io/file "resources/public/uploads" filename)])]
+    (first (filter #(.exists %) candidates))))
+
+(defn- finalize-image! [src servicio-id]
+  (let [src (str/trim (or src ""))
+        filename (str "servicio" servicio-id ".jpg")
+        target (io/file (uploads-dir) filename)]
+    (cond
+      (str/blank? src)
+      nil
+
+      (= src (upload-url filename))
+      src
+
+      (data-url? src)
+      (do
+        (write-data-url-jpg! src target)
+        (upload-url filename))
+
+      :else
+      (if-let [source (upload-source-file src)]
+        (do
+          (draw-jpg! (ImageIO/read source) target)
+          (upload-url filename))
+        src))))
 
 (defn- json-ok
   ([]      {:status 200 :headers {"Content-Type" "application/json"} :body (json/write-str {:ok true})})
@@ -85,10 +160,12 @@
           id   (:id body)
           data (normalize-body body)]
       (if id
-        (do
-          (model/update! id data)
-          (json-ok {:id (parse-int id)}))
-        (let [new-id (model/create! data)]
+        (let [servicio-id (parse-int id)
+              final-data (assoc data :imagen (finalize-image! (:imagen data) servicio-id))]
+          (model/update! id final-data)
+          (json-ok {:id servicio-id}))
+        (let [new-id (model/create! (assoc data :imagen nil))]
+          (model/update! new-id (assoc data :imagen (finalize-image! (:imagen data) new-id)))
           {:status 201
            :headers {"Content-Type" "application/json"}
            :body (json/write-str {:ok true :id new-id})})))

@@ -328,7 +328,7 @@
 
      (image-modal)
 
-     [:script {:src "/js/servicios-vehiculo.js?v=2"}]]))
+     [:script {:src "/js/servicios-vehiculo.js?v=3"}]]))
 
 ;; ─────────────────────────────────────────
 ;; EDITAR / NUEVO
@@ -473,7 +473,7 @@
      (image-modal)
      (camera-modal)
 
-     [:script {:src "/js/servicios-vehiculo.js?v=2"}]]))
+     [:script {:src "/js/servicios-vehiculo.js?v=3"}]]))
 
 ;; ─────────────────────────────────────────
 ;; PRINT
@@ -566,4 +566,4 @@
     {:onclick "window.print()"}
     "🖨 Imprimir"]
 
-   [:script {:src "/js/servicios-vehiculo.js?v=2"}]])
+   [:script {:src "/js/servicios-vehiculo.js?v=3"}]])
