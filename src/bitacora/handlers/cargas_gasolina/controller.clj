@@ -6,11 +6,7 @@
             [bitacora.models.util :refer [get-session-id]]
             [clojure.data.json :as json]
             [clojure.string :as str]
-            [clojure.java.io :as io])
-  (:import [java.awt Color]
-           [java.awt.image BufferedImage]
-           [java.util Base64]
-           [javax.imageio ImageIO]))
+            [clojure.java.io :as io]))
 
 ;; ─────────────────────────────────────────
 ;; Helpers privados
@@ -84,27 +80,27 @@
         true (assoc :rendimiento_p_km actual
                     :porcentaje_rendimiento pct)
         (seq textos) (assoc :observaciones
-                             (reduce append-kpl-observaciones (:observaciones current) textos))))
+                            (reduce append-kpl-observaciones (:observaciones current) textos))))
     current))
 
 (defn- with-kpl-list [rows]
   (let [rows-by-vehiculo (group-by :vehiculo_id rows)
         computed (reduce
-                   (fn [acc [_ vehiculo-rows]]
-                     (let [sorted (sort #(let [date-a (or (:fecha %1) "")
-                                               date-b (or (:fecha %2) "")
-                                               cmp (compare date-b date-a)]
-                                           (if (zero? cmp)
-                                             (compare (:id %2) (:id %1))
-                                             cmp))
-                                         vehiculo-rows)
-                           annotated (map (fn [current previous]
-                                            (or (compute-kpl current previous) current))
-                                          sorted
-                                          (concat (rest sorted) [nil]))]
-                       (into acc annotated)))
-                   []
-                   rows-by-vehiculo)]
+                  (fn [acc [_ vehiculo-rows]]
+                    (let [sorted (sort #(let [date-a (or (:fecha %1) "")
+                                              date-b (or (:fecha %2) "")
+                                              cmp (compare date-b date-a)]
+                                          (if (zero? cmp)
+                                            (compare (:id %2) (:id %1))
+                                            cmp))
+                                       vehiculo-rows)
+                          annotated (map (fn [current previous]
+                                           (or (compute-kpl current previous) current))
+                                         sorted
+                                         (concat (rest sorted) [nil]))]
+                      (into acc annotated)))
+                  []
+                  rows-by-vehiculo)]
     (let [rows-by-id (into {} (map (fn [row] [(:id row) row]) computed))]
       (mapv #(get rows-by-id (:id %) %) rows))))
 
@@ -126,78 +122,6 @@
    :ticket_imagen    (:ticket_imagen body)
    :tipo_combustible (:tipo_combustible body)
    :observaciones    (:observaciones body)})
-
-(defn- uploads-dir []
-  (doto (io/file (:uploads config))
-    (.mkdirs)))
-
-(defn- upload-url [filename]
-  (str (:path config) filename))
-
-(defn- data-url? [s]
-  (and (string? s) (str/starts-with? s "data:image/")))
-
-(defn- final-image-url? [s filename]
-  (= s (upload-url filename)))
-
-(defn- draw-jpg! [image target]
-  (when-not image
-    (throw (ex-info "No se pudo leer la imagen." {})))
-  (let [rgb (BufferedImage. (.getWidth image) (.getHeight image) BufferedImage/TYPE_INT_RGB)
-        g   (.createGraphics rgb)]
-    (try
-      (.setColor g Color/WHITE)
-      (.fillRect g 0 0 (.getWidth rgb) (.getHeight rgb))
-      (.drawImage g image 0 0 nil)
-      (ImageIO/write rgb "jpg" target)
-      (finally
-        (.dispose g)))))
-
-(defn- write-data-url-jpg! [src target]
-  (let [[_ payload] (str/split src #"," 2)
-        bytes (.decode (Base64/getDecoder) payload)]
-    (with-open [in (io/input-stream bytes)]
-      (draw-jpg! (ImageIO/read in) target))))
-
-(defn- upload-source-file [src]
-  (let [filename (cond
-                   (str/starts-with? src (:path config))
-                   (subs src (count (:path config)))
-
-                   (str/starts-with? src "/uploads/")
-                   (subs src (count "/uploads/"))
-
-                   (not (str/includes? src "/"))
-                   src
-
-                   :else nil)
-        candidates (when filename
-                     [(io/file (uploads-dir) filename)
-                      (io/file "resources/public/uploads" filename)])]
-    (first (filter #(.exists %) candidates))))
-
-(defn- finalize-image! [src carga-id slot]
-  (let [src (str/trim (or src ""))
-        filename (str "cargas" carga-id slot ".jpg")
-        target (io/file (uploads-dir) filename)]
-    (cond
-      (str/blank? src)
-      nil
-
-      (final-image-url? src filename)
-      src
-
-      (data-url? src)
-      (do
-        (write-data-url-jpg! src target)
-        (upload-url filename))
-
-      :else
-      (if-let [source (upload-source-file src)]
-        (do
-          (draw-jpg! (ImageIO/read source) target)
-          (upload-url filename))
-        src))))
 
 (defn- json-ok
   ([]      {:status 200 :headers {"Content-Type" "application/json"} :body (json/write-str {:ok true})})
@@ -248,8 +172,9 @@
       (let [temp     (or (:tempfile file) (get file "tempfile"))
             original (or (:filename file) (get file "filename"))
             ext      (or (when original (re-find #"\.[A-Za-z0-9]+$" original)) ".jpg")
-            nombre   (str "tmp-cargas-" (java.util.UUID/randomUUID) ext)
-            dir      (uploads-dir)
+            nombre   (str (java.util.UUID/randomUUID) ext)
+            dir      (io/file (:uploads config) "cargas-gasolina")
+            _        (.mkdirs dir)
             destino  (io/file dir nombre)]
 
         (when-not temp
@@ -257,7 +182,7 @@
 
         (io/copy temp destino)
 
-        (json-ok {:url (upload-url nombre)})))
+        (json-ok {:url (str "/uploads/cargas-gasolina/" nombre)})))
 
     (catch Exception e
       (json-err 500 (.getMessage e)))))
@@ -330,16 +255,10 @@
       (if-not (:ok check)
         (json-err (:status check) (:error check))
         (if id
-          (let [final-data (assoc data
-                                  :imagen (finalize-image! (:imagen data) id 1)
-                                  :ticket_imagen (finalize-image! (:ticket_imagen data) id 2))]
-            (model/update! id final-data)
+          (do
+            (model/update! id data)
             (json-ok {:id id}))
-          (let [new-id (model/create! (assoc data :imagen nil :ticket_imagen nil))
-                final-data (assoc data
-                                  :imagen (finalize-image! (:imagen data) new-id 1)
-                                  :ticket_imagen (finalize-image! (:ticket_imagen data) new-id 2))]
-            (model/update! new-id final-data)
+          (let [new-id (model/create! data)]
             {:status 201
              :headers {"Content-Type" "application/json"}
              :body (json/write-str {:ok true :id new-id})}))))
