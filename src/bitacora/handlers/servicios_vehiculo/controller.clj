@@ -34,7 +34,7 @@
    :imagen          (:imagen body)})
 
 (defn- uploads-dir []
-  (doto (io/file (:uploads config) "servicios")
+  (doto (io/file (:uploads config))
     (.mkdirs)))
 
 (defn- upload-url [filename]
@@ -80,7 +80,7 @@
 
 (defn- finalize-image! [src servicio-id]
   (let [src (str/trim (or src ""))
-        filename (str "servicio" servicio-id ".jpg")
+        filename (str "servicio_vehiculo" servicio-id ".jpg")
         target (io/file (uploads-dir) filename)]
     (cond
       (str/blank? src)
