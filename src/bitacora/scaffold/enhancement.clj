@@ -25,34 +25,3 @@
     (catch Exception e
       (println (str "Error loading " (name entity-keyword) ":" (.getMessage e)))
       {})))
-
-(defn check-tabgrid-status
-  "Check TabGrid status for all entities"
-  []
-  (doseq [entity [:propiedades :alquileres :clientes :agentes]]
-    (let [config (load-entity-config entity)]
-      (when config
-        (println (str (name entity) ": "
-                      (if (should-use-tabgrid config)
-                        "TabGrid UI"
-                        "Regular Grid UI")))))))
-
-(defn get-tabgrid-entities
-  "Get list of entities that will use TabGrid UI"
-  []
-  (filter should-use-tabgrid
-          (map load-entity-config [:propiedades :alquileres :clientes :agentes])))
-
-(defn integrate-tabgrid-into-scaffold
-  "One-call integration with existing scaffold system"
-  []
-  {:integrated true
-   :tabgrid-entities (get-tabgrid-entities)
-   :changes-required false})
-
-(defn test-enhancement
-  "Test the enhancement system"
-  []
-  (check-tabgrid-status)
-  (let [result (integrate-tabgrid-into-scaffold)]
-    (println (str "Result: " result))))

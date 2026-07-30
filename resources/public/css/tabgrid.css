@@ -1,166 +1,991 @@
-/* TabGrid Styles */
+/* ========================================================
+   TabGrid UI — Theme-aware, mobile-first CRUD layout
+   ======================================================== */
+
+/* ── Core variables ────────────────────────────────────── */
+
+:root {
+  --tg-bg: var(--bs-body-bg, #f8f9fc);
+  --tg-surface: var(--bs-body-bg, #ffffff);
+  --tg-card-bg: var(--bs-card-bg, #ffffff);
+  --tg-border: var(--bs-border-color, #e2e8f0);
+  --tg-primary: var(--bs-primary, #0d6efd);
+  --tg-primary-soft: color-mix(in srgb, var(--bs-primary, #0d6efd) 8%, transparent);
+  --tg-primary-10: color-mix(in srgb, var(--bs-primary, #0d6efd) 6%, transparent);
+  --tg-muted: var(--bs-secondary-color, #6c757d);
+  --tg-text: var(--bs-body-color, #1a1d21);
+  --tg-radius: var(--bs-border-radius-lg, 0.75rem);
+  --tg-radius-sm: var(--bs-border-radius, 0.5rem);
+  --tg-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --tg-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --tg-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.1);
+  --tg-transition: 0.2s ease;
+  --tg-transition-slow: 0.3s ease;
+  --tg-hover-bg: var(--tg-primary-soft);
+  --tg-hover-border: var(--bs-primary, #0d6efd);
+  --tg-input-bg: var(--bs-tertiary-bg, #f8f9fa);
+  --tg-active-bg: var(--bs-primary, #0d6efd);
+  --tg-active-shadow: 0 2px 12px color-mix(in srgb, var(--bs-primary, #0d6efd) 25%, transparent);
+}
+
+html, body {
+  min-height: 100%;
+  background: var(--tg-bg);
+  color: var(--tg-text);
+}
 
 .tabgrid-container {
-  margin: 0;
+  padding: 1rem 0 2rem;
+  animation: tg-fade-in 0.35s ease;
+}
+
+@keyframes tg-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Breadcrumb ───────────────────────────────────────── */
+
+.tabgrid-container .breadcrumb {
+  background: transparent;
   padding: 0;
+  margin-bottom: 1.25rem;
+  font-size: 0.8125rem;
 }
 
-/* Parent row selection */
-.parent-row.cursor-pointer {
-  cursor: pointer;
-  transition: background-color 0.2s ease;
+.tabgrid-container .breadcrumb a {
+  color: var(--tg-primary);
+  text-decoration: none;
+  transition: color var(--tg-transition);
 }
 
-.parent-row td.cursor-pointer {
-  cursor: pointer;
+.tabgrid-container .breadcrumb a:hover {
+  color: color-mix(in srgb, var(--tg-primary) 80%, #000);
 }
 
-.parent-row.cursor-pointer:hover {
-  background-color: rgba(13, 110, 253, 0.1);
+.tabgrid-container .breadcrumb-item + .breadcrumb-item::before {
+  color: var(--tg-muted);
 }
 
-.parent-row td.cursor-pointer:hover {
-  background-color: rgba(13, 110, 253, 0.15);
+/* ── Cards ─────────────────────────────────────────────── */
+
+.tabgrid-container .card {
+  border: 1px solid var(--tg-border);
+  border-radius: var(--tg-radius);
+  box-shadow: var(--tg-shadow-sm);
+  background: var(--tg-card-bg);
+  transition: box-shadow var(--tg-transition-slow);
 }
 
-.parent-row.selected {
-  background-color: rgba(13, 110, 253, 0.15);
-  font-weight: 600;
+.tabgrid-container .card:hover {
+  box-shadow: var(--tg-shadow);
 }
 
-/* Tab styling */
-.nav-tabs .nav-link {
-  color: #6c757d;
-  font-weight: 500;
-  border: 1px solid transparent;
-  transition: all 0.3s ease;
+.tabgrid-container .card-header {
+  background: var(--tg-card-bg);
+  border-bottom: 1px solid var(--tg-border);
 }
 
-.nav-tabs .nav-link:hover {
-  color: #0d6efd;
-  background-color: rgba(13, 110, 253, 0.05);
+.tabgrid-container .card-header h5,
+.tabgrid-container .card-header .fw-bold {
+  font-size: 0.9375rem;
 }
 
-.nav-tabs .nav-link.active {
-  color: #0d6efd;
-  background-color: #fff;
-  border-color: #dee2e6 #dee2e6 #fff;
-  font-weight: 600;
+/* ── Record list ───────────────────────────────────────── */
+
+/* ── Page scroll container ──────────────────────────────── */
+.tg-page-scroll {
+  overflow-y: auto;
+  padding-bottom: 1rem;
 }
 
-.nav-tabs .nav-link i {
-  font-size: 0.9em;
-}
-
-/* Tab content */
-.tab-content {
-  background-color: #fff;
-  border: 1px solid #dee2e6;
-  border-top: none;
-  border-radius: 0 0 0.375rem 0.375rem;
-  padding: 1.5rem;
-}
-
-.tab-pane {
-  animation: fadeIn 0.3s ease-in;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
+/* ── Desktop: viewport-locked layout ────────────────────── */
+@media (min-width: 1200px) {
+  /* When tabgrid is present, lock this container — columns scroll themselves */
+  .tg-page-scroll:has(.tabgrid-container) {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-bottom: 0;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+
+  .tabgrid-container {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Breadcrumb + heading: fixed height */
+  .tabgrid-container > .mb-2,
+  .tabgrid-container > .mb-3 {
+    flex-shrink: 0;
+  }
+
+  /* Main row: fills remaining space with definite height */
+  .tabgrid-container > .row.g-4 {
+    flex: 1 1 0;
+    min-height: 0;
+    flex-wrap: nowrap;
+    align-items: stretch;
+  }
+
+  /* Left column: 1/4 width, scroll */
+  .tabgrid-container > .row > .col-xl-4 {
+    flex: 0 0 20%;
+    max-width: 20%;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--tg-border) transparent;
+  }
+
+  /* Right column: remaining 2/3, scroll */
+  .tabgrid-container > .row > .col-xl-8 {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--tg-border) transparent;
+  }
+
+  .tabgrid-container > .row > .col-xl-4::-webkit-scrollbar,
+  .tabgrid-container > .row > .col-xl-8::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  .tabgrid-container > .row > .col-xl-4::-webkit-scrollbar-track,
+  .tabgrid-container > .row > .col-xl-8::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .tabgrid-container > .row > .col-xl-4::-webkit-scrollbar-thumb,
+  .tabgrid-container > .row > .col-xl-8::-webkit-scrollbar-thumb {
+    background: var(--tg-border);
+    border-radius: 10px;
+  }
+
+  .tabgrid-container > .row > .col-xl-4::-webkit-scrollbar-thumb:hover,
+  .tabgrid-container > .row > .col-xl-8::-webkit-scrollbar-thumb:hover {
+    background: var(--tg-muted);
+  }
+
+  /* Inner scroll wrapper redundant on desktop — column handles it */
+  .tabgrid-container .tg-list-scroll {
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .tabgrid-container .card-header.d-flex {
+    align-items: center;
   }
 }
 
-/* Subgrid loading */
-.subgrid-loading {
-  text-align: center;
-  padding: 3rem 1rem;
-  color: #6c757d;
+/* Scroll wrapper — plain div, no flex involvement */
+.tabgrid-container .tg-list-scroll {
+  max-height: calc(100vh - 160px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: var(--tg-border) transparent;
 }
 
-.subgrid-loading .spinner-border {
-  width: 3rem;
-  height: 3rem;
+.tabgrid-container .tg-list-scroll::-webkit-scrollbar {
+  width: 5px;
 }
 
-/* DataTable in tabgrid */
-.tabgrid-container .dataTable {
-  font-size: 0.95rem;
+.tabgrid-container .tg-list-scroll::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-.tabgrid-container .dataTable thead th {
-  background-color: #f8f9fa;
-  border-bottom: 2px solid #dee2e6;
-  font-weight: 600;
-  color: #495057;
-  padding: 0.75rem;
+.tabgrid-container .tg-list-scroll::-webkit-scrollbar-thumb {
+  background: var(--tg-border);
+  border-radius: 10px;
 }
 
-.tabgrid-container .dataTable tbody td {
-  padding: 0.75rem;
-  vertical-align: middle;
+.tabgrid-container .tg-list-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--tg-muted);
 }
 
-/* Action buttons in tables */
-.tabgrid-container .btn-group-sm .btn {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.85rem;
-}
-
-/* Modal for parent selection */
-#modal .modal-dialog.modal-xl {
-  max-width: 90%;
-}
-
-.select-parent-btn {
-  min-width: 80px;
-}
-
-/* Badge styling */
-.badge {
-  font-weight: 500;
-  padding: 0.4em 0.6em;
-}
-
-/* Card shadows */
-.card.shadow-sm {
-  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+/* List items */
+.tabgrid-container .list-group {
   border: none;
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .tabgrid-container .nav-tabs {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  
-  .tabgrid-container .nav-tabs .nav-item {
-    flex-shrink: 0;
-  }
-  
-  .tab-content {
-    padding: 1rem;
-  }
+.tabgrid-container .list-group-item .subtitle {
+  font-size: 0.75rem;
+  line-height: 1.3;
+  margin-top: 0.125rem;
 }
 
-/* Add subgrid button */
-.add-subgrid-btn {
-  white-space: nowrap;
+.tabgrid-container .list-group-item {
+  border: 1px solid var(--tg-border);
+  border-left: 3px solid transparent;
+  border-radius: var(--tg-radius-sm);
+  margin-bottom: 0.25rem;
+  padding: 0.75rem 1rem;
+  transition: all var(--tg-transition);
+  color: var(--tg-text);
+  background: var(--tg-card-bg);
+  cursor: pointer;
+  text-decoration: none;
 }
 
-/* Empty state */
-.subgrid-table-wrapper:empty::after {
-  content: 'No records to display';
-  display: block;
+.tabgrid-container .list-group-item:hover {
+  background: var(--tg-hover-bg);
+  border-color: color-mix(in srgb, var(--tg-hover-border) 20%, var(--tg-border));
+  border-left-color: var(--tg-hover-border);
+  transform: translateX(2px);
+}
+
+.tabgrid-container .list-group-item.active {
+  background: var(--tg-active-bg) !important;
+  border-color: var(--tg-active-bg) !important;
+  border-left-color: color-mix(in srgb, var(--tg-active-bg) 70%, #000) !important;
+  color: #fff !important;
+  box-shadow: var(--tg-active-shadow);
+  transform: translateX(2px);
+}
+
+.tabgrid-container .list-group-item.active .badge {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: #fff !important;
+}
+
+.tabgrid-container .list-group-item.active .text-muted,
+.tabgrid-container .list-group-item.active .small {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+
+.tabgrid-container .list-group-item .text-muted {
+  color: var(--tg-muted) !important;
+}
+
+/* Stagger animation for list items */
+.tabgrid-container .list-group-item {
+  animation: tg-item-in 0.3s ease both;
+}
+
+@keyframes tg-item-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tabgrid-container .list-group-item:nth-child(1) { animation-delay: 0.02s; }
+.tabgrid-container .list-group-item:nth-child(2) { animation-delay: 0.04s; }
+.tabgrid-container .list-group-item:nth-child(3) { animation-delay: 0.06s; }
+.tabgrid-container .list-group-item:nth-child(4) { animation-delay: 0.08s; }
+.tabgrid-container .list-group-item:nth-child(5) { animation-delay: 0.10s; }
+.tabgrid-container .list-group-item:nth-child(6) { animation-delay: 0.12s; }
+.tabgrid-container .list-group-item:nth-child(7) { animation-delay: 0.14s; }
+.tabgrid-container .list-group-item:nth-child(8) { animation-delay: 0.16s; }
+.tabgrid-container .list-group-item:nth-child(9) { animation-delay: 0.18s; }
+.tabgrid-container .list-group-item:nth-child(10) { animation-delay: 0.20s; }
+
+/* ── Search input ──────────────────────────────────────── */
+
+.tabgrid-container .input-group .form-control {
+  background: var(--tg-input-bg);
+  color: var(--tg-text);
+  border-color: var(--tg-border);
+  transition: border-color var(--tg-transition), box-shadow var(--tg-transition);
+}
+
+.tabgrid-container .input-group .form-control:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tg-primary) 12%, transparent);
+  border-color: var(--tg-primary);
+  color: var(--tg-text);
+}
+
+.tabgrid-container .input-group .input-group-text {
+  border-color: var(--tg-border);
+  background: var(--tg-input-bg);
+  color: var(--tg-muted);
+  transition: border-color var(--tg-transition);
+}
+
+.tabgrid-container .input-group .form-control:focus + .btn {
+  border-color: var(--tg-primary);
+}
+
+.tabgrid-container .input-group .btn {
+  background: var(--tg-input-bg);
+  border-color: var(--tg-border);
+  color: var(--tg-muted);
+}
+
+.tabgrid-container .input-group .btn:hover {
+  background: var(--tg-primary-soft);
+  color: var(--tg-primary);
+}
+
+/* ── Search live count ─────────────────────────────────── */
+
+.tg-search-count {
+  display: inline-block;
+  min-width: 1.5rem;
   text-align: center;
-  padding: 2rem;
-  color: #6c757d;
-  font-style: italic;
 }
+
+/* ── Tables ────────────────────────────────────────────── */
+
+.tabgrid-container .table {
+  margin-bottom: 0;
+  color: var(--tg-text);
+}
+
+.tabgrid-container .table th {
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tg-muted);
+  font-weight: 600;
+}
+
+.tabgrid-container .table td,
+.tabgrid-container .table th {
+  vertical-align: middle;
+  border-bottom-color: var(--tg-border);
+}
+
+.tabgrid-container .table-hover tbody tr {
+  transition: background var(--tg-transition);
+}
+
+.tabgrid-container .table-hover tbody tr:hover {
+  background: var(--tg-primary-10);
+}
+
+.tabgrid-container .table-responsive {
+  overflow-x: auto;
+}
+
+/* ── Buttons ───────────────────────────────────────────── */
+
+.tabgrid-container .btn {
+  border-radius: var(--tg-radius-sm);
+  transition: all var(--tg-transition);
+  font-weight: 500;
+}
+
+.tabgrid-container .btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.tabgrid-container .btn:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.tabgrid-container .btn.rounded-pill {
+  border-radius: 50rem;
+}
+
+.tabgrid-container .btn-primary {
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--bs-primary, #0d6efd) 20%, transparent);
+}
+
+.tabgrid-container .btn-primary:hover {
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--bs-primary, #0d6efd) 30%, transparent);
+}
+
+/* ── Badges ────────────────────────────────────────────── */
+
+.tabgrid-container .badge.rounded-pill {
+  font-weight: 600;
+  font-size: 0.6875rem;
+  letter-spacing: 0.02em;
+}
+
+/* ── Field cards ───────────────────────────────────────── */
+
+.field-card-hover {
+  transition: all var(--tg-transition);
+  background: var(--tg-card-bg);
+  border-color: var(--tg-border);
+  border-left: 3px solid transparent;
+}
+
+.field-card-hover:hover {
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--bs-primary, #0d6efd) 8%, transparent);
+  border-color: color-mix(in srgb, var(--bs-primary, #0d6efd) 20%, transparent) !important;
+  border-left-color: var(--tg-primary) !important;
+  transform: translateY(-1px);
+}
+
+.field-card-hover .text-uppercase.text-muted {
+  color: var(--tg-muted) !important;
+}
+
+.field-card-hover i.bi {
+  opacity: 0.8;
+  transition: opacity var(--tg-transition);
+}
+
+.field-card-hover:hover i.bi {
+  opacity: 1;
+}
+
+/* ── Entity summary header ─────────────────────────────── */
+
+.tg-entity-header {
+  position: relative;
+  overflow: hidden;
+}
+
+.tg-entity-header::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--tg-primary), color-mix(in srgb, var(--tg-primary) 40%, #6610f2));
+  border-radius: var(--tg-radius) var(--tg-radius) 0 0;
+}
+
+/* ── Subgrid card accents ──────────────────────────────── */
+
+.tg-subgrid-m2m .card-header { border-top: 3px solid var(--bs-primary, #0d6efd); }
+.tg-subgrid-1to1 .card-header { border-top: 3px solid var(--bs-info, #0dcaf0); }
+.tg-subgrid-1toN .card-header { border-top: 3px solid var(--bs-success, #198754); }
+
+.tg-subgrid-1toN,
+.tg-subgrid-m2m,
+.tg-subgrid-1to1 {
+  border: 1px solid var(--tg-border, #dee2e6) !important;
+}
+
+.tg-sg-actions {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  border-left: 1px solid var(--tg-border, #dee2e6);
+}
+
+td.tg-sg-actions {
+  background: var(--tg-card-bg, #fff);
+}
+
+th.tg-sg-actions {
+  background: var(--bs-body-bg, #fff);
+}
+
+/* ── Empty states ──────────────────────────────────────── */
+
+.tg-empty-state {
+  animation: tg-empty-pulse 3s ease-in-out infinite;
+}
+
+@keyframes tg-empty-pulse {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.03); }
+}
+
+/* ── Images ────────────────────────────────────────────── */
+
+.tabgrid-container img.rounded {
+  border-radius: var(--tg-radius-sm) !important;
+  transition: transform var(--tg-transition-slow), box-shadow var(--tg-transition-slow);
+}
+
+.tabgrid-container img.rounded:hover {
+  box-shadow: var(--tg-shadow-lg);
+}
+
+/* ── Accordion ─────────────────────────────────────────── */
+
+.tabgrid-container .accordion-button {
+  border: 1px solid var(--tg-border);
+  border-radius: var(--tg-radius);
+  background: var(--tg-card-bg);
+  color: var(--tg-muted);
+}
+
+.tabgrid-container .accordion-button:not(.collapsed) {
+  background: var(--tg-primary-soft);
+  color: var(--tg-primary);
+}
+
+.tabgrid-container .accordion-item {
+  border: none;
+  margin-bottom: 0.75rem;
+}
+
+.tabgrid-container .accordion-body {
+  padding: 1rem;
+  border: 1px solid var(--tg-border);
+  border-top: none;
+  border-radius: 0 0 var(--tg-radius) var(--tg-radius);
+  background: var(--tg-card-bg);
+}
+
+/* ── Text color overrides for theme harmony ────────────── */
+
+.tabgrid-container .text-muted {
+  color: var(--tg-muted) !important;
+}
+
+.tabgrid-container h5.fw-semibold.text-muted,
+.tabgrid-container h6.fw-semibold.text-muted {
+  color: var(--tg-text) !important;
+  opacity: 0.7;
+}
+
+/* ── Touch / Mobile-first ──────────────────────────────── */
+
+.tabgrid-container a,
+.tabgrid-container button,
+.tabgrid-container .list-group-item,
+.tabgrid-container .theme-option {
+  min-height: 44px;
+}
+
+@media (hover: none) {
+  .tabgrid-container .btn:hover,
+  .tabgrid-container .list-group-item:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  .tabgrid-container .btn:active {
+    transform: scale(0.97);
+    opacity: 0.85;
+  }
+
+  .tabgrid-container .list-group-item:active {
+    transform: scale(0.98);
+  }
+
+  .tabgrid-container .field-card-hover:hover {
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+.tabgrid-container .list-group-item {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tabgrid-container .btn {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Mobile responsive ─────────────────────────────────── */
+
+@media (max-width: 767px) {
+  .tabgrid-container {
+    padding: 0.5rem 0 1rem;
+  }
+
+  .tabgrid-container .row > [class*='col-'] {
+    width: 100%;
+  }
+
+  /* Scroll wrapper: shorter on mobile */
+  .tabgrid-container .tg-list-scroll {
+    max-height: 45vh;
+  }
+
+  .tabgrid-container .list-group-item {
+    margin-bottom: 0.375rem;
+    padding: 0.625rem 0.75rem;
+  }
+
+  /* Tables → cards on mobile */
+  .tabgrid-container .table-responsive {
+    border: none;
+    overflow: visible;
+  }
+
+  .tabgrid-container .table-responsive table {
+    display: block;
+    width: 100%;
+  }
+
+  .tabgrid-container .table-responsive table thead {
+    display: none;
+  }
+
+  .tabgrid-container .table-responsive table tbody tr {
+    display: block;
+    margin-bottom: 0.75rem;
+    border: 1px solid var(--tg-border);
+    border-radius: var(--tg-radius);
+    padding: 0.875rem 1rem;
+    background: var(--tg-card-bg);
+    box-shadow: var(--tg-shadow-sm);
+  }
+
+  .tabgrid-container .table-responsive table tbody td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    border: none;
+    padding: 0.4rem 0;
+    text-align: right;
+    font-size: 0.875rem;
+  }
+
+  .tabgrid-container .table-responsive table tbody td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--tg-muted);
+    text-align: left;
+    flex-shrink: 0;
+    margin-right: 0.5rem;
+  }
+
+  .tabgrid-container .table-responsive table tbody td:last-child {
+    justify-content: flex-end;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--tg-border);
+    margin-top: 0.25rem;
+  }
+
+  .tabgrid-container .table-responsive table tbody td:last-child::before {
+    display: none;
+  }
+
+  .tabgrid-container .card-body {
+    padding: 0.75rem 1rem !important;
+  }
+
+  .tabgrid-container .card-header {
+    padding: 0.75rem 1rem !important;
+  }
+
+  .tabgrid-container .breadcrumb {
+    font-size: 0.8rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .tabgrid-container .input-group .form-control {
+    padding: 0.625rem 0.75rem;
+    font-size: 1rem;
+  }
+
+  .tabgrid-container .input-group .input-group-text {
+    padding: 0.625rem 0.75rem;
+  }
+
+  .tabgrid-container .input-group .btn {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .tabgrid-container .btn-sm {
+    padding: 0.5rem 0.875rem;
+    font-size: 0.8rem;
+  }
+
+  .tabgrid-container .card-body .row.g-3 > .col-12 {
+    padding-top: 0;
+  }
+
+  /* Entity summary: stack action buttons full-width on mobile */
+  .tabgrid-container .tg-entity-header .d-flex.gap-2 {
+    width: 100%;
+  }
+
+  .tabgrid-container .tg-entity-header .d-flex.gap-2 .btn {
+    flex: 1;
+  }
+
+  /* Subgrids: full-width action buttons on mobile */
+  .tabgrid-container .card-header.d-flex.justify-content-between {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .tabgrid-container .card-header.d-flex.justify-content-between > .btn {
+    width: 100%;
+  }
+
+  /* Record list: full-width search */
+  .tabgrid-container .tg-list-card .input-group {
+    min-height: 44px;
+  }
+
+  /* Hide list-card border/overflow on mobile — let scroll wrapper handle it */
+  .tabgrid-container .tg-list-card {
+    border-radius: var(--tg-radius);
+  }
+}
+
+/* Tablet */
+@media (min-width: 768px) and (max-width: 1199px) {
+  .tabgrid-container .tg-list-scroll {
+    max-height: 60vh;
+  }
+}
+
+/* Landscape phone */
+@media (max-height: 500px) and (orientation: landscape) {
+  .tabgrid-container .tg-list-scroll {
+    max-height: 35vh;
+  }
+
+  .tabgrid-container .card-body {
+    padding: 0.5rem 0.75rem !important;
+  }
+
+  .tabgrid-container .field-card-hover {
+    padding: 0.5rem !important;
+  }
+}
+
+/* ── Dark theme overrides ──────────────────────────────── */
+
+.theme-darkly,
+.theme-cyborg,
+.theme-slate,
+.theme-solar,
+.theme-superhero,
+.theme-quartz,
+.theme-vapor {
+  --tg-bg: var(--bs-body-bg);
+  --tg-surface: var(--bs-body-bg);
+  --tg-card-bg: var(--bs-card-bg, var(--bs-body-bg));
+  --tg-border: var(--bs-border-color);
+  --tg-input-bg: var(--bs-tertiary-bg, color-mix(in srgb, var(--bs-body-bg) 80%, #000));
+  --tg-hover-bg: color-mix(in srgb, var(--bs-primary) 15%, transparent);
+  --tg-primary-soft: color-mix(in srgb, var(--bs-primary) 12%, transparent);
+  --tg-primary-10: color-mix(in srgb, var(--bs-primary) 10%, transparent);
+  --tg-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --tg-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --tg-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.theme-darkly .tabgrid-container,
+.theme-cyborg .tabgrid-container,
+.theme-slate .tabgrid-container,
+.theme-solar .tabgrid-container,
+.theme-superhero .tabgrid-container,
+.theme-quartz .tabgrid-container,
+.theme-vapor .tabgrid-container {
+  --tg-text: var(--bs-body-color);
+}
+
+.theme-darkly .tabgrid-container .list-group-item.active,
+.theme-cyborg .tabgrid-container .list-group-item.active,
+.theme-slate .tabgrid-container .list-group-item.active,
+.theme-solar .tabgrid-container .list-group-item.active,
+.theme-superhero .tabgrid-container .list-group-item.active,
+.theme-quartz .tabgrid-container .list-group-item.active,
+.theme-vapor .tabgrid-container .list-group-item.active {
+  background: var(--bs-primary) !important;
+}
+
+.theme-darkly .field-card-hover:hover,
+.theme-cyborg .field-card-hover:hover,
+.theme-slate .field-card-hover:hover,
+.theme-solar .field-card-hover:hover,
+.theme-superhero .field-card-hover:hover,
+.theme-quartz .field-card-hover:hover,
+.theme-vapor .field-card-hover:hover {
+  background: color-mix(in srgb, var(--bs-primary) 8%, var(--bs-body-bg)) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.theme-darkly .tabgrid-container .input-group .form-control,
+.theme-cyborg .tabgrid-container .input-group .form-control,
+.theme-slate .tabgrid-container .input-group .form-control,
+.theme-solar .tabgrid-container .input-group .form-control,
+.theme-superhero .tabgrid-container .input-group .form-control,
+.theme-quartz .tabgrid-container .input-group .form-control,
+.theme-vapor .tabgrid-container .input-group .form-control {
+  background: var(--tg-input-bg);
+  color: var(--tg-text);
+  border-color: var(--tg-border);
+}
+
+.theme-darkly .tabgrid-container .input-group .input-group-text,
+.theme-cyborg .tabgrid-container .input-group .input-group-text,
+.theme-slate .tabgrid-container .input-group .input-group-text,
+.theme-solar .tabgrid-container .input-group .input-group-text,
+.theme-superhero .tabgrid-container .input-group .input-group-text,
+.theme-quartz .tabgrid-container .input-group .input-group-text,
+.theme-vapor .tabgrid-container .input-group .input-group-text {
+  background: var(--tg-input-bg);
+  color: var(--tg-muted);
+  border-color: var(--tg-border);
+}
+
+.theme-darkly .tabgrid-container .breadcrumb-item + .breadcrumb-item::before,
+.theme-cyborg .tabgrid-container .breadcrumb-item + .breadcrumb-item::before,
+.theme-slate .tabgrid-container .breadcrumb-item + .breadcrumb-item::before,
+.theme-solar .tabgrid-container .breadcrumb-item + .breadcrumb-item::before,
+.theme-superhero .tabgrid-container .breadcrumb-item + .breadcrumb-item::before,
+.theme-quartz .tabgrid-container .breadcrumb-item + .breadcrumb-item::before,
+.theme-vapor .tabgrid-container .breadcrumb-item + .breadcrumb-item::before {
+  color: var(--tg-muted);
+}
+
+.theme-darkly .tabgrid-container [class*="-subtle"],
+.theme-cyborg .tabgrid-container [class*="-subtle"],
+.theme-slate .tabgrid-container [class*="-subtle"],
+.theme-solar .tabgrid-container [class*="-subtle"],
+.theme-superhero .tabgrid-container [class*="-subtle"],
+.theme-quartz .tabgrid-container [class*="-subtle"],
+.theme-vapor .tabgrid-container [class*="-subtle"] {
+  background-color: color-mix(in srgb, currentColor 10%, var(--bs-body-bg)) !important;
+}
+
+/* ── Utility classes ───────────────────────────────────── */
+
+/* ── Ctrl+K keyboard hint ──────────────────────────────── */
+
+.tg-kbd-hint {
+  font-size: 0.6875rem;
+  font-family: var(--bs-font-monospace);
+  color: var(--tg-muted);
+  background: var(--tg-input-bg);
+  border: 1px solid var(--tg-border);
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.45rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  letter-spacing: 0.03em;
+  opacity: 0.65;
+  transition: opacity var(--tg-transition);
+  pointer-events: none;
+}
+
+.tg-search-group:hover .tg-kbd-hint,
+.tg-search-group:focus-within .tg-kbd-hint {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .tg-kbd-hint { display: none !important; }
+}
+
+/* ── Search group focus ring ───────────────────────────── */
+
+.tg-search-group .form-control:focus {
+  z-index: 1;
+}
+
+/* ── Floating action button (mobile only) ──────────────── */
+
+.tg-fab {
+  display: none;
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--tg-primary);
+  color: #fff;
+  font-size: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--tg-primary) 40%, transparent);
+  text-decoration: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  z-index: 1050;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tg-fab:active {
+  transform: scale(0.9);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--tg-primary) 30%, transparent);
+}
+
+@media (max-width: 767px) {
+  .tg-fab {
+    display: flex;
+  }
+}
+
+/* ── Detail column smooth scroll ───────────────────────── */
+
+.tg-detail-col {
+  scroll-behavior: smooth;
+}
+
+.tg-detail-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--tg-border) transparent;
+}
+
+.tg-detail-scroll::-webkit-scrollbar { width: 5px; }
+.tg-detail-scroll::-webkit-scrollbar-track { background: transparent; }
+.tg-detail-scroll::-webkit-scrollbar-thumb { background: var(--tg-border); border-radius: 10px; }
+.tg-detail-scroll::-webkit-scrollbar-thumb:hover { background: var(--tg-muted); }
+
+/* ── Subgrid search ──────────────────────────────────────── */
+
+.tg-sg-search-bar {
+  border-bottom: 1px solid var(--tg-border);
+  background: var(--tg-card-bg);
+}
+
+.tg-sg-search-bar .form-control {
+  font-size: 0.8125rem;
+  padding: 0.35rem 0.5rem;
+}
+
+.tg-sg-search-bar .input-group-text {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.8125rem;
+}
+
+.tg-sg-count {
+  font-size: 0.6875rem;
+  min-width: 3rem;
+  text-align: right;
+}
+
+/* ── Edited row highlight (:target-based) ────────────────── */
+
+.tg-sg-table tr:target {
+  animation: tg-row-glow 2s ease;
+}
+
+@keyframes tg-row-glow {
+  0%   { background-color: rgba(13, 110, 253, 0.15); box-shadow: inset 3px 0 0 var(--tg-primary); }
+  70%  { background-color: rgba(13, 110, 253, 0.08); box-shadow: inset 3px 0 0 var(--tg-primary); }
+  100% { background-color: transparent; box-shadow: inset 3px 0 0 transparent; }
+}
+
+/* ── Edited row highlight (class-based, legacy) ─────────── */
+
+.tg-row-highlighted {
+  animation: tg-row-glow 2s ease;
+}
+
+/* ── Compact subgrid table in accordion body ─────────────── */
+
+.tg-sg-table {
+  font-size: 0.8125rem;
+}
+
+.tg-sg-table td {
+  padding: 0.35rem 0.5rem;
+  vertical-align: middle;
+}
+
+.tg-sg-table th {
+  font-size: 0.625rem;
+  padding: 0.35rem 0.5rem;
+}
+
+/* ── Utility classes ───────────────────────────────────── */
+
+.text-purple { color: #6f42c1 !important; }
+.text-orange { color: #fd7e14 !important; }
+.ls-tight { letter-spacing: -0.02em; }
+.fs-7 { font-size: 0.6875rem; }

@@ -6,8 +6,7 @@
    See: HOOKS_GUIDE.md for detailed documentation and examples.
    Example: src/bitacora/hooks/alquileres.clj
    
-   Uncomment the hooks you need and implement the logic."
-  (:require [bitacora.models.util :refer [image-link]]))
+   Uncomment the hooks you need and implement the logic.")
 
 ;; =============================================================================
 ;; Validators
@@ -65,10 +64,7 @@
    Returns: Modified rows vector"
   [rows params]
   (println "[INFO] Loaded" (count rows) "servicios_vehiculo record(s)")
-  ;; Transform file fields to image links
-  (map #(-> %
-            (assoc :imagen (image-link (:imagen %)))
-        ) rows))
+  rows)
 
 (defn before-save
   "Hook executed before saving a record.
@@ -83,18 +79,7 @@
    Returns: Modified params map OR {:errors {...}} if validation fails"
   [params]
   (println "[INFO] Saving servicios_vehiculo...")
-
-  ;; Handle file upload for imagen field
-  ;; The system expects :file key, but our field is named :imagen
-  (if-let [file-data (:imagen params)]
-    (if (and (map? file-data) (:tempfile file-data))
-      ;; It's a file upload - move it to :file key so build-form-save finds it
-      (-> params
-          (assoc :file file-data)
-          (dissoc :imagen))
-      ;; It's already a string (existing filename) - keep as is
-      params)
-    params))
+  params)
 
 (defn after-save
   "Hook executed after successfully saving a record.
@@ -144,5 +129,5 @@
   {:success true})
 
  ;; Lifecycle hooks for business logic
- :hooks {:before-save :contactos.hooks.contactos/before-save
-         :after-load :contactos.hooks.contactos/after-load}
+:hooks {:before-save :contactos.hooks.contactos/before-save
+        :after-load :contactos.hooks.contactos/after-load}

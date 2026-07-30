@@ -8,7 +8,32 @@
   ;; Load subgrid data
   (GET "/tabgrid/load-subgrid" request
     (handlers/handle-load-subgrid request))
-  
+
   ;; Get parent record
   (GET "/tabgrid/get-parent" request
-    (handlers/handle-get-parent request)))
+    (handlers/handle-get-parent request))
+
+  ;; Many-to-many association management
+  (POST "/tabgrid/dissociate" request
+    (handlers/handle-dissociate request))
+
+  (GET "/tabgrid/pivot-form" request
+    (handlers/handle-pivot-form request))
+
+  ;; Fresh M2M pane HTML fragment (used for in-place refresh without page reload)
+  (GET "/tabgrid/m2m-pane" request
+    (handlers/handle-m2m-pane request))
+
+  ;; Generic subgrid pane fragment (1:N, 1:1, M:M) for "Show all" / refresh
+  (GET "/tabgrid/subgrid-pane" request
+    (handlers/handle-subgrid-pane request))
+
+  (POST "/tabgrid/save-pivot" request
+    (handlers/handle-save-pivot request))
+
+  ;; Full-page link form (replaces the old modal)
+  (GET "/tabgrid/link-form" request
+    (handlers/handle-link-form request))
+
+  (POST "/tabgrid/link-save" request
+    (handlers/handle-link-save request)))

@@ -1,17 +1,17 @@
 (ns bitacora.handlers.home.view
   (:require
-   [bitacora.models.form :refer [login-form password-form]]))
+   [bitacora.i18n.core :as i18n]
+   [bitacora.models.form :refer [login-form password-form]]
+   [bitacora.models.util :refer [user-email user-level]]
+   [bitacora.web.csrf :refer [csrf-field]]))
 
 (defn home-view
   []
   (list
    [:div.container.mt-5
     [:div.text-center
-     [:h1.text-info "Bitacora Fleet"]
-     [:p.text-muted "Sistema de Gestion Vehicular"]
-     [:p.text-muted "Serviendo a la comunidad desde 1998"]
-     [:p "Free Code City, Mexicali Baja California Mexico, 21050"]
-     [:p "Phone: (686) 123-4567 | Email: marcopescador@hotmail.com"]]]))
+     [:h1.text-info (:site-name bitacora.models.crud/config)]
+     [:p.text-muted (i18n/tr :auth/welcome)]]]))
 
 (defn main-view
   "This creates the login form and we are passing the title from the controller"
@@ -19,6 +19,74 @@
   (let [href "/home/login"]
     (login-form title href)))
 
+(defn temp-password-view
+  [users selected-username message temp-password]
+  [:div.container.mt-5
+   [:div.row.justify-content-center
+    [:div.col-lg-8
+     [:div.card.shadow
+      [:div.card-header.bg-primary.text-white
+       [:h4.mb-0 (i18n/tr :temp-password/title)]]
+      [:div.card-body
+       (when message
+         [:div.alert.alert-info message])
+       [:form {:method "POST" :action "/home/temp-password"}
+        (csrf-field)
+        [:div.mb-3
+         [:label.form-label.fw-semibold {:for "username"}
+          (i18n/tr :temp-password/select-user)]
+         [:select.form-select {:id "username" :name "username" :required true}
+          [:option {:value ""} (i18n/tr :temp-password/placeholder-user)]
+          (for [user users]
+            [:option {:value (:username user)
+                      :selected (= (:username user) selected-username)}
+             (str (:username user)
+                  (when-let [email (:email user)]
+                    (str " (" email ")")))])]]
+        [:div.d-flex.gap-2.justify-content-end.mt-4
+         [:button.btn.btn-success {:type "submit"}
+          (i18n/tr :temp-password/title)]]]
+       (when temp-password
+         [:div.mt-4
+          [:div.alert.alert-success
+           [:h5.mb-0 (i18n/tr :temp-password/created)]]
+          [:p.mb-1 (i18n/tr :temp-password/copy-warning)]
+          [:pre.p-3.bg-light.rounded [:code temp-password]]])]]]]])
+
+(defn forgot-password-view
+  [email message]
+  [:div.container.d-flex.justify-content-center.align-items-center
+   {:style "min-height: 80vh;"}
+   [:div.card.shadow-lg.w-100
+    {:style "max-width: 420px;"}
+    [:div.card-header.bg-primary.text-white.text-center
+     [:h4.mb-0.fw-bold (i18n/tr :auth/reset-password)]]
+    [:div.card-body.p-4
+     (when message
+       [:div.alert.alert-info message])
+     [:form {:method "POST" :action "/home/forgot-password"}
+      (csrf-field)
+      [:div.mb-3
+       [:label.form-label.fw-semibold {:for "email"}
+        [:i.bi.bi-envelope.me-2] (i18n/tr :form/email)]
+       [:input.form-control.form-control-lg
+        {:id "email"
+         :name "email"
+         :type "email"
+         :required true
+         :placeholder (i18n/tr :form/email)
+         :autocomplete "email"}]]
+      [:div.d-flex.gap-2.justify-content-end.mt-4
+       [:button.btn.btn-success.btn-lg.fw-semibold
+        {:type "submit"}
+        [:i.bi.bi-send.me-2] (i18n/tr :auth/reset-password)]]]
+     [:div.text-center.mt-3
+      [:a.small.text-decoration-none {:href "/home/login"}
+       (i18n/tr :common/back) " " (i18n/tr :auth/login)]]]]])
+
 (defn change-password-view
-  [title]
-  (password-form title))
+  [request title]
+  (let [level (user-level request)
+        email (user-email request)
+        email-readonly? (not (some #(= level %) #{"A" "S"}))]
+    (password-form title :user-email email :email-readonly? email-readonly?)))

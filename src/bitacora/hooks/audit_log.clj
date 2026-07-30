@@ -1,4 +1,4 @@
-(ns bitacora.hooks.users)
+(ns bitacora.hooks.audit-log)
 
 (defn before-load [params]
   params)

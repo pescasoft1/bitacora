@@ -2,7 +2,8 @@
   (:require
    [bitacora.engine.config :as config]
    [bitacora.engine.query :as query]
-   [bitacora.models.crud :as crud]))
+   [bitacora.models.crud :as crud]
+   [bitacora.i18n.core :as i18n]))
 
 (defn- execute-hook
   "Executes a hook function or Var if it exists."
@@ -17,6 +18,8 @@
   [entity data]
   (let [config (config/get-entity-config entity)
         fields (:fields config)
+        file-types #{:file :pdf :document}
+        is-update? (boolean (:id data))
         errors (atom [])]
 
     ;; Check required fields
@@ -24,10 +27,14 @@
       (when (:required? field)
         (let [field-id (:id field)
               value (get data field-id)]
-          (when (or (nil? value) (and (string? value) (empty? value)))
+          (when (and (or (nil? value) (and (string? value) (empty? value)))
+                     ;; File fields: skip required check on updates — existing value preserved in DB
+                     (not (and is-update? (file-types (:type field)))))
             (swap! errors conj
                    {:field field-id
-                    :message (str (:label field) " is required")})))))
+                    :message (i18n/tr :validation/required {:field (if (keyword? (:label field))
+                                                                     (i18n/tr (:label field))
+                                                                     (:label field))})})))))
 
     ;; Execute custom validators
     (doseq [field fields]
@@ -38,7 +45,9 @@
             (when-not (validator value data)
               (swap! errors conj
                      {:field field-id
-                      :message (str (:label field) " is invalid")}))
+                      :message (i18n/tr :validation/invalid-data {:field (if (keyword? (:label field))
+                                                                           (i18n/tr (:label field))
+                                                                           (:label field))})}))
             (catch Exception e
               (swap! errors conj
                      {:field field-id
@@ -73,12 +82,20 @@
                   (let [field-id (:id field)
                         default-value (:value field)
                         current-value (get acc field-id)
-                        should-apply (and default-value
-                                          (or (nil? current-value)
-                                              (and (string? current-value) (empty? current-value))))]
-                    (if should-apply
-                      (assoc acc field-id default-value)
-                      acc)))
+                        checkbox? (= :checkbox (:type field))]
+                    (if checkbox?
+                      (if (nil? current-value)
+                        (if-let [off-value (-> field :options second :value)]
+                          (assoc acc field-id off-value)
+                          acc)
+                        acc)
+                      (let [should-apply (and default-value
+                                              (or (nil? current-value)
+                                                  (and (string? current-value)
+                                                       (empty? current-value))))]
+                        (if should-apply
+                          (assoc acc field-id default-value)
+                          acc)))))
                 data
                 fields)]
     result))
@@ -137,7 +154,7 @@
                    (prepare-data entity data))]
     (if (:success prepared)
       (let [clean-data (:data prepared)
-            is-new-record? (not (:id clean-data))
+            is-new-record? (zero? (crud/crud-fix-id (:id clean-data)))
 
             ;; Add audit fields if entity has them
             enhanced-data (if (or (:audit? config)
@@ -173,18 +190,55 @@
   (let [config (config/get-entity-config entity)
         hooks (:hooks config)
         connection (or (:conn opts) (:connection config) :default)
-        table (:table config)]
+        table (:table config)
+        file-types #{:file :pdf :document}
+        file-fields (map :id (filter #(file-types (:type %)) (:fields config)))]
     (when (and (not (:skip-hooks? opts))
                (:before-delete hooks))
       (execute-hook (:before-delete hooks) {:id id}))
 
     (let [result (try
-                   (crud/build-form-delete table id :conn connection)
+                   (crud/build-form-delete table id :conn connection
+                                           :file-fields (vec file-fields))
                    (catch Exception e
                      (println "[ERROR] delete-record failed:" (.getMessage e))
-                     {:success false :error (.getMessage e)}))]
+                     {:success false :error (.getMessage e)}))
+          success? (or (= true result) (:success result))]
 
-      (when (and (or (= true result) (:success result))
+      (when success?
+        ;; Clean up child entity orphaned files and M:M junction rows
+        (try
+          (doseq [subgrid (:subgrids config)]
+            (let [child-entity (:entity subgrid)
+                  child-fk (:foreign-key subgrid)
+                  child-cfg (try (config/get-entity-config child-entity)
+                                 (catch Exception _ nil))
+                  child-file-fields (when child-cfg
+                                      (map :id (filter #(file-types (:type %)) (:fields child-cfg))))]
+              ;; Clean up child entity files (1:M and 1:1 only — skip M:M)
+              (when (and (seq child-file-fields)
+                         (not= (:relationship-type subgrid) :many-to-many))
+                (doseq [ff child-file-fields]
+                  (let [rows (crud/Query [(str "SELECT " (name ff) " FROM " (:table child-cfg)
+                                               " WHERE " (name child-fk) " = ?") id]
+                                         :conn connection)]
+                    (doseq [row rows]
+                      (when-let [fname (get row ff)]
+                        (crud/safe-delete-upload! fname))))))
+              ;; Clean up M:M junction rows
+              (when (= (:relationship-type subgrid) :many-to-many)
+                (let [through-table (or (:through-table subgrid) child-entity)
+                      through-cfg  (try (config/get-entity-config through-table)
+                                        (catch Exception _ nil))
+                      through-table-name (or (:table through-cfg) (name through-table))]
+                  (when through-table-name
+                    (crud/Delete through-table-name
+                                 [(str (name child-fk) " = ?") id]
+                                 :conn connection))))))
+          (catch Exception e
+            (println "[WARN] Error cleaning up child entities:" (.getMessage e)))))
+
+      (when (and success?
                  (not (:skip-hooks? opts))
                  (:after-delete hooks))
         (execute-hook (:after-delete hooks) {:id id} result))
@@ -232,12 +286,22 @@
         false))))  ; Return failure indicator
 
 (defn save-with-audit
-  "Saves a record and creates an audit trail entry."
+  "Saves a record and creates an audit trail entry.
+   For updates, fetches the old record before saving so the audit log
+   can show a before/after diff."
   [entity data user-id & [opts]]
-  (let [result (save-record entity data opts)
-        operation (if (:id data) :update :create)]
+  (let [id-val (crud/crud-fix-id (:id data))
+        old-data (when-not (zero? id-val)
+                   (try
+                     (query/get-record entity id-val)
+                     (catch Exception _ nil)))
+        result (save-record entity data (assoc opts :user-id user-id))
+        operation (if old-data :update :create)
+        audit-data (if old-data
+                     {:new data :old old-data}
+                     data)]
     (when (:success result)
-      (create-audit-entry entity operation data user-id))
+      (create-audit-entry entity operation audit-data user-id))
     result))
 
 (defn delete-with-audit

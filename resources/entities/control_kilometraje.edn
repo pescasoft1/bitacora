@@ -15,21 +15,30 @@
  ;; Fields auto-detected from database schema
  :fields [{:id :id :label "ID" :type :hidden}
           {:id :vehiculo_id
-           :label "Vehiculo ID"
+           :label "Vehiculo"
            :type :fk
            :fk :vehiculos
            :fk-field [:nombre]
            :fk-can-create? true
            :hidden-in-grid? true}
-
+          {:id :vehiculo_nombre :label "Vehiculo" :grid-only? true}
           {:id :fecha :label "Fecha" :type :date :required? true}
           {:id :kilometraje :label "Kilometraje" :type :number :required? true}
-          {:id :observaciones :label "Observaciones" :type :textarea :placeholder "Observaciones..."}
-          ]
+          {:id :observaciones :label "Observaciones" :type :textarea :placeholder "Observaciones..."}]
 
- ;; Auto-generated queries (customize as needed)
- :queries {:list "SELECT con.*, veh.nombre as vehiculo_nombre FROM control_kilometraje con LEFT JOIN vehiculos veh ON con.vehiculo_id = veh.id ORDER BY con.id DESC"
-           :get "SELECT * FROM control_kilometraje WHERE id = ?"}
+;; Auto-generated queries (customize as needed)
+ :queries {:list "SELECT 
+           con.*, 
+           veh.nombre as vehiculo_nombre 
+           FROM control_kilometraje con 
+           LEFT JOIN vehiculos veh ON con.vehiculo_id = veh.id 
+           ORDER BY con.id DESC"
+           :get "SELECT 
+           con.*, 
+           veh.nombre as vehiculo_nombre 
+           FROM control_kilometraje con 
+           LEFT JOIN vehiculos veh ON con.vehiculo_id = veh.id 
+           WHERE con.id = ?"}
 
  ;; Available actions
  :actions {:new true :edit true :delete true}
@@ -37,7 +46,7 @@
  ;; Enable audit trail (tracks who created/modified and when)
  ;; Uncomment to enable:
  ;; :audit? true
- 
+
  ;; Lifecycle hooks for business logic
  ;; Senior developer: Implement these in src/bitacora/hooks/control_kilometraje.clj
  ;; Uncomment and implement as needed:
@@ -47,7 +56,7 @@
  ;;         :after-save :bitacora.hooks.control_kilometraje/after-save
  ;;         :before-delete :bitacora.hooks.control_kilometraje/before-delete
  ;;         :after-delete :bitacora.hooks.control_kilometraje/after-delete}
- 
+
  ;; Subgrids (parent-child relationships)
  ;; Uncomment if this entity has child records:
  ;; :subgrids [{:entity :related-table

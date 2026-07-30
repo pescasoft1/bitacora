@@ -23,8 +23,20 @@
         content (view/control-kilometraje request title rows)]
     (application request title ok js content)))
 
-(defn main
+(defn users
   [request]
-  (conductores request))
+  (let [title "Reporte de usuarios"
+        ok (get-session-id request)
+        js nil
+        rows (model/get-users)
+        content (view/users request title rows)]
+    (application request title ok js content)))
 
- 
+(defn audit-log
+  [request]
+  (let [title "Reporte de auditoría"
+        ok (get-session-id request)
+        js nil
+        rows (model/get-audit-log)
+        content (view/audit-log request title rows)]
+    (application request title ok js content)))

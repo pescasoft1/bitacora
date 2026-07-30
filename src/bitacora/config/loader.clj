@@ -1,7 +1,8 @@
 (ns bitacora.config.loader
   "Centralized configuration loading and management"
   (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [bitacora.i18n.core :as i18n]))
 
 (defn load-config
   "Load configuration from resources/config directory"
@@ -29,9 +30,7 @@
                   :connection-params {:mysql {:use-ssl false :server-timezone "UTC"}
                                       :postgres {:sslmode "disable"}}}
        :ui {:themes ["sketchy" "cerulean" "cosmo" "cyborg" "darkly"]
-            :assets {:thumbnail-width 42 :thumbnail-height 32}
-            :frontend {:css ["dataTables.bootstrap5.min.css" "bootstrap-icons.css"]
-                       :js ["jquery-3.7.1.min.js" "jquery.dataTables.min.js"]}}
+            :assets {:thumbnail-width 42 :thumbnail-height 32}}
        :security {:csrf-token-name "anti-forgery-token"
                   :ajax-header "x-requested-with"
                   :session-secret-key "rs-session-key"}
@@ -106,7 +105,12 @@
   (get-in (get-all-configs) [:app-config :database :connection-params db-type]))
 
 (defn get-error-message
-  "Get localized error message"
+  "Get localized error message via i18n system.
+   Maps (error-type, error-key) to a flat translation key.
+   Falls back to :db/general if specific key not found."
   [error-type error-key locale]
-  (get-in (get-all-configs) [:messages error-type error-key locale]
-          (get-in (get-all-configs) [:messages error-type error-key :en])))
+  (let [k (keyword (str "db") (str (name error-type) "-" (name error-key)))
+        msg (i18n/t k locale)]
+    (if (= (name k) msg)
+      (i18n/t :db/general locale)
+      msg)))

@@ -86,7 +86,7 @@
   (let [f (io/file dir)]
     (when (.exists f)
       (doseq [child (reverse (file-seq f))]
-        (.delete child))
+        (.delete ^java.io.File child))
       (println "  Removed:" dir))))
 
 (defn- remove-handler!

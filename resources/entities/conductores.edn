@@ -18,8 +18,10 @@
           {:id :nombre :label "Nombre" :type :text :required? true :placeholder "Nombre..."}
           {:id :telefono :label "Telefono" :type :text :placeholder "Telefono..."}
           {:id :licencia :label "Licencia" :type :text :placeholder "Licencia..."}
-          {:id :activo :label "Activo" :type :number}
-          {:id :fecha_registro :label "Fecha Registro" :type :textarea :placeholder "Fecha Registro..." :hidden-in-grid? true}]
+          {:id :activo :label "Activo" :type :checkbox :value 1 :options [{:value 1}
+                                                                          {:value 0}]}
+          ;; {:id :fecha_registro :label "Fecha Registro" :type :textarea :placeholder "Fecha Registro..." :hidden-in-grid? true}
+          ]
 
  ;; Auto-generated queries (customize as needed)
  :queries {:list "SELECT * FROM conductores ORDER BY id DESC"

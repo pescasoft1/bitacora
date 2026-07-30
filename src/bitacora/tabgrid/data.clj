@@ -1,8 +1,14 @@
 (ns bitacora.tabgrid.data
-  "Data fetching and transformation for TabGrid"
+  "Data fetching and transformation for TabGrid.
+   Each relationship type has its own fetch strategy:
+     :one-to-many  - SQL WHERE filtering on foreign key
+     :one-to-one   - SQL WHERE filtering, returns single record
+     :many-to-many - junction table join + related entity merge"
   (:require
+   [clojure.string :as str]
    [bitacora.engine.config :as config]
-   [bitacora.engine.query :as query]))
+   [bitacora.engine.query :as query]
+   [bitacora.models.crud :as crud]))
 
 (defn build-fields-map
   "Builds a field map for rendering from entity config"
@@ -25,35 +31,156 @@
   (query/list-with-hooks entity))
 
 (defn fetch-subgrid-records
-  "Fetches subgrid records filtered by parent foreign key"
+  "Fetches subgrid records filtered by parent foreign key.
+   Uses the entity's :list query (which may include JOINs and formatted fields)
+   and filters in Clojure, falling back to raw SQL when no :list query is defined."
   [subgrid-entity parent-id foreign-key]
   (when (and subgrid-entity parent-id foreign-key)
-    (let [all-records (query/list-with-hooks subgrid-entity)
-          fk-keyword (keyword foreign-key)
-          filtered (filter #(= (str (get % fk-keyword)) (str parent-id)) all-records)]
-      filtered)))
+    (let [cfg     (config/get-entity-config subgrid-entity)
+          fk-kw   (keyword foreign-key)
+          fk-val  (str parent-id)]
+      (if (get-in cfg [:queries :list])
+        ;; Use entity's :list query (preserves JOINs, formatted fields, hooks)
+        ;; then filter by foreign key in Clojure
+        (filter #(= (str (get % fk-kw)) fk-val)
+                (query/list-with-hooks subgrid-entity))
+        ;; Fallback: no :list query defined, use raw SELECT *
+        (let [table (:table cfg)
+              conn  (:connection cfg)]
+          (when table
+            (crud/Query [(str "SELECT * FROM " table " WHERE " (name foreign-key) " = ?")
+                         (Long/parseLong fk-val)]
+                        :conn conn)))))))
+
+(defn fetch-one-to-one-record
+  "Fetches the single associated record for a one-to-one relationship, or nil.
+   Uses SQL WHERE filtering."
+  [sg-entity parent-id foreign-key]
+  (when (and sg-entity parent-id foreign-key)
+    (let [cfg     (config/get-entity-config sg-entity)
+          table   (:table cfg)
+          conn    (:connection cfg)
+          fk-name (name foreign-key)]
+      (if table
+        (first (crud/Query [(str "SELECT * FROM " table " WHERE " fk-name " = ?")
+                            (Long/parseLong (str parent-id))]
+                           :conn conn))
+        ;; fallback
+        (let [fk-kw (keyword foreign-key)]
+          (first (filter #(= (str (get % fk-kw)) (str parent-id))
+                         (query/list-with-hooks sg-entity))))))))
+
+(defn fetch-many-to-many-records
+  "Returns the related-entity rows linked to parent-id via a junction table,
+   enriched with junction-table attributes (e.g. proficiency, role).
+   Uses SQL WHERE filtering for both junction and related queries.
+   Returns {:records [...] :linked-ids #{...}}."
+  [junction-entity related-entity parent-id parent-fk related-fk]
+  (when (and junction-entity parent-id parent-fk)
+    (let [parent-fk-kw  (keyword parent-fk)
+          related-fk-kw (keyword related-fk)
+          junction-cfg  (config/get-entity-config junction-entity)
+          j-table       (:table junction-cfg)
+          j-conn        (:connection junction-cfg)
+          parent-id-val (Long/parseLong (str parent-id))
+          junctions     (if j-table
+                          (crud/Query [(str "SELECT * FROM " j-table
+                                          " WHERE " (name parent-fk) " = ?")
+                                       parent-id-val]
+                                      :conn j-conn)
+                          (filter #(= (str (get % parent-fk-kw)) (str parent-id))
+                                  (query/list-with-hooks junction-entity)))
+          related-by-id (when related-entity
+                          (let [r-cfg (config/get-entity-config related-entity)]
+                            (into {} (map (fn [r] [(:id r) r])
+                                          (if (:table r-cfg)
+                                            (crud/Query (str "SELECT * FROM " (:table r-cfg))
+                                                        :conn (:connection r-cfg))
+                                            (query/list-with-hooks related-entity))))))
+          linked-ids    (into #{} (map #(get % related-fk-kw) junctions))]
+      {:records   (mapv (fn [j]
+                          (merge (get related-by-id (get j related-fk-kw) {})
+                                 j))
+                        junctions)
+       :linked-ids linked-ids})))
+
+(defn fetch-available-for-linking
+  "Returns related-entity records that are NOT yet linked via the junction table.
+   Uses SQL WHERE NOT IN for efficiency when possible."
+  [related-entity linked-ids]
+  (when related-entity
+    (let [cfg    (config/get-entity-config related-entity)
+          table  (:table cfg)
+          conn   (:connection cfg)]
+      (if (and table (seq linked-ids))
+        (let [placeholders (str/join "," (repeat (count linked-ids) "?"))
+              params       (mapv #(Long/parseLong (str %)) linked-ids)
+              sql-vec      (into [(str "SELECT * FROM " table " WHERE id NOT IN (" placeholders ")")]
+                                 params)
+              records (crud/Query sql-vec :conn conn)]
+          records)
+        ;; fallback: load all and filter
+        (remove #(contains? linked-ids (:id %))
+                (query/list-with-hooks related-entity))))))
 
 (defn prepare-subgrid-config
-  "Prepares a single subgrid configuration for rendering"
-  [parent-entity subgrid-spec]
-  (let [sg-entity (:entity subgrid-spec)
-        sg-config (config/get-entity-config sg-entity)
-        sg-fields (build-fields-map sg-entity)]
-    {:entity sg-entity
-     :title (or (:title subgrid-spec) (:title sg-config) (name sg-entity))
-     :foreign-key (:foreign-key subgrid-spec)
-     :icon (or (:icon subgrid-spec) "bi bi-list-ul")
-     :label (or (:label subgrid-spec) (:title sg-config))
-     :fields sg-fields
-     :actions (or (:actions sg-config) {:new true :edit true :delete true})}))
+  "Prepares a single subgrid configuration for rendering.
+   Pre-fetches data for all relationship types (no more AJAX lazy loading)."
+  [_parent-entity subgrid-spec parent-id]
+  (let [sg-entity  (:entity subgrid-spec)
+        sg-config  (config/get-entity-config sg-entity)
+        sg-fields  (build-fields-map sg-entity)
+        fk         (:foreign-key subgrid-spec)
+        rel-type   (or (:relationship-type subgrid-spec) :one-to-many)
+        base       {:entity            sg-entity
+                    :title             (or (:title subgrid-spec) (:title sg-config) (name sg-entity))
+                    :foreign-key       fk
+                    :icon              (or (:icon subgrid-spec) "bi bi-list-ul")
+                    :label             (or (:label subgrid-spec) (:title sg-config))
+                    :relationship-type rel-type
+                    :through-table     (or (:through-table subgrid-spec) sg-entity)
+                    :related-entity    (:related-entity subgrid-spec)
+                    :related-fk        (:related-fk subgrid-spec)
+                    :fields            sg-fields
+                    :actions           (or (:actions sg-config) {:new true :edit true :delete true})}]
+    (case rel-type
+      :one-to-one
+      (let [record (when parent-id (fetch-one-to-one-record sg-entity parent-id fk))]
+        (assoc base
+               :record record
+               :count  (if record 1 0)))
+
+      :many-to-many
+      (let [junction       (or (:through-table subgrid-spec) sg-entity)
+            related        (:related-entity subgrid-spec)
+            related-fk     (:related-fk subgrid-spec)
+            related-fields (when related (build-fields-map related))
+            m2m-data       (when parent-id
+                             (fetch-many-to-many-records junction related parent-id fk related-fk))
+            records        (or (:records m2m-data) [])
+            linked-ids     (or (:linked-ids m2m-data) #{})
+            available      (fetch-available-for-linking related linked-ids)]
+        (assoc base
+               ;; Use related-entity fields for display in the M2M pane
+               :fields         (or related-fields sg-fields)
+               :records        records
+               :available      available
+               :related-fields (or related-fields sg-fields)
+               :count          (count records)))
+
+      ;; :one-to-many — pre-fetch all records server-side
+      (let [records (when parent-id (fetch-subgrid-records sg-entity parent-id fk))]
+        (assoc base
+               :records records
+               :count (count records))))))
 
 (defn prepare-all-subgrids
-  "Prepares all subgrid configurations from parent entity config"
-  [parent-entity]
+  "Prepares all subgrid configurations from parent entity config, with record counts."
+  [parent-entity parent-id]
   (let [parent-config (config/get-entity-config parent-entity)
         subgrid-specs (:subgrids parent-config)]
     (when (seq subgrid-specs)
-      (mapv #(prepare-subgrid-config parent-entity %) subgrid-specs))))
+      (mapv #(prepare-subgrid-config parent-entity % parent-id) subgrid-specs))))
 
 (defn prepare-tabgrid-data
   "Prepares all data needed for tabgrid rendering"
@@ -68,7 +195,9 @@
         ;; Parent display shows ONLY the selected record (or first if none selected)
         parent-display-rows (if parent-record [parent-record] [])
         fields (build-fields-map entity)
-        subgrids (prepare-all-subgrids entity)
+        subgrids (prepare-all-subgrids entity (when parent-record
+                                                (or (:id parent-record)
+                                                    parent-id)))
         actions (or (:actions entity-config) {:new true :edit true :delete true})]
     {:entity entity
      :entity-name (name entity)

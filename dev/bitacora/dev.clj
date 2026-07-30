@@ -12,10 +12,10 @@
 
 (defn- entities-changed? []
   (when-let [dir (io/resource "entities")]
-    (let [edn-files (filter #(-> % .getName (.endsWith ".edn"))
+    (let [edn-files (filter #(-> ^java.io.File % .getName (.endsWith ".edn"))
                             (file-seq (io/file dir)))]
       (when (seq edn-files)
-        (let [newest-mod (apply max (map #(.lastModified %) edn-files))
+        (let [newest-mod (apply max (map #(.lastModified ^java.io.File %) edn-files))
               last-mod  (:entities-last-mod @reload-state 0)]
           (when (> newest-mod last-mod)
             (swap! reload-state assoc :entities-last-mod newest-mod)
@@ -43,5 +43,6 @@
    (-> #'core/app
        (wrap-reload {:reload-compile-errors? false})
        wrap-auto-reload)
-   {:port (:port config)
-    :join? false}))
+    {:host "0.0.0.0"
+     :port (:port config)
+     :join? false}))

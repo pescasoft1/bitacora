@@ -1,7 +1,9 @@
 (ns bitacora.engine.query
   (:require
+   [clojure.string :as str]
    [bitacora.engine.config :as config]
-   [bitacora.models.crud :as crud]))
+   [bitacora.models.crud :as crud]
+   [bitacora.models.crud :refer [Query]]))
 
 ;; =============================================================================
 ;; Query Resolution
@@ -31,18 +33,18 @@
         connection (or conn (:connection config) :default)
         query-def (get-in config [:queries query-key])
         query (resolve-query query-def)]
-    
+
     (cond
       ;; SQL string query
       (string? query)
       (if (empty? params)
         (crud/Query query :conn connection)
         (crud/Query (into [query] params) :conn connection))
-      
+
       ;; Function query
       (fn? query)
       (query params connection)
-      
+
       :else
       (throw (ex-info "Unsupported query type"
                       {:entity entity :query-key query-key :query query})))))
@@ -53,13 +55,23 @@
   [entity & [opts]]
   (execute-query entity (merge {:query-key :list} opts)))
 
+(defn- parse-composite-id
+  "Parse composite key IDs that are pipe-separated (e.g., '1|2').
+   Returns a vector of individual key values."
+  [id primary-key]
+  (if (and primary-key (vector? primary-key) (> (count primary-key) 1))
+    (str/split (str id) #"\|")
+    [id]))
+
 (defn get-record
   "Executes the :get query for an entity with an ID.
-   Returns a single record."
+   Returns a single record. Handles both simple and composite keys."
   [entity id & [opts]]
-  (first
-   (execute-query entity
-                  (merge {:query-key :get :params [id]} opts))))
+  (let [config (config/get-entity-config entity)
+        params (parse-composite-id id (:primary-key config))]
+    (first
+     (execute-query entity
+                    (merge {:query-key :get :params params} opts)))))
 
 (defn custom-query
   "Executes a custom named query from the entity configuration.
@@ -113,21 +125,28 @@
   [entity {:keys [before-hook after-hook] :as opts}]
   (let [config (config/get-entity-config entity)
         params (:params opts [])
-        
+
         ;; Execute before hook
         params (if before-hook
                  (before-hook params)
                  params)
-        
+
         ;; Execute query
         result (execute-query entity (assoc opts :params params))
-        
+
         ;; Execute after hook
         result (if after-hook
                  (after-hook result params)
                  result)]
-    
+
     result))
+
+(defn- file-fields-for-entity
+  "Returns the list of file field keywords for an entity config."
+  [entity]
+  (let [cfg (config/get-entity-config entity)
+        file-types #{:file :pdf :document}]
+    (map :id (filter #(file-types (:type %)) (:fields cfg)))))
 
 (defn list-with-hooks
   "Lists records with before-load and after-load hooks."
@@ -135,27 +154,128 @@
   (let [config (config/get-entity-config entity)
         hooks (:hooks config)
         before-load (:before-load hooks)
-        after-load (:after-load hooks)]
-    (execute-with-hooks entity
-                        (merge {:query-key :list
-                                :before-hook before-load
-                                :after-hook after-load}
-                               opts))))
+        after-load (:after-load hooks)
+        file-fields (file-fields-for-entity entity)
+        result (execute-with-hooks entity
+                                   (merge {:query-key :list
+                                           :before-hook before-load
+                                           :after-hook after-load}
+                                          opts))]
+    (if (seq file-fields)
+      (crud/apply-file-links result file-fields)
+      result)))
+
+(defn count-records
+  "Counts total records for an entity, with optional search filter.
+   Uses the entity's :table to generate COUNT queries.
+   Returns the count as a long."
+  [entity & [opts]]
+  (let [cfg (config/get-entity-config entity)
+        table (:table cfg)
+        search (:search opts)
+        search-fields (or (:search-fields opts)
+                          (config/get-search-fields entity))
+        conn (:connection cfg)]
+    (if table
+      (let [[sql params] (if (and search (not (str/blank? search)) (seq search-fields))
+                           (let [likes (map #(str (name %) " LIKE ?") search-fields)]
+                             [(str "SELECT COUNT(*) FROM " table " WHERE " (str/join " OR " likes))
+                              (repeat (count search-fields) (str "%" search "%"))])
+                           [(str "SELECT COUNT(*) FROM " table) []])]
+        (-> (first (Query (into [sql] params) :conn conn))
+            first
+            val
+            (or 0)))
+      ;; Fallback: use list query and count in Clojure
+      (count (list-records entity opts))))
+
+(defn list-records-paginated
+  "Lists records for an entity with pagination, search, and sort.
+   Uses the entity's :table to build SQL directly (ignores :list query)
+   for maximum compatibility with server-rendered tables.
+
+   Options:
+   - :page         Page number (1-based, default 1)
+   - :per-page     Records per page (default 0 = no pagination)
+   - :search       Search string (applied as LIKE on searchable fields)
+   - :sort-by      Column keyword to sort by (default :id)
+   - :sort-order   :asc or :desc (default :desc)
+   - :search-fields  Custom list of field keywords to search
+
+   Returns a map with :records, :total, :page, :per-page."
+  [entity & [opts]]
+  (let [cfg (config/get-entity-config entity)
+        table (:table cfg)
+        page (max 1 (or (:page opts) 1))
+        per-page (or (:per-page opts) 0)
+        search (:search opts)
+        sort-by (or (:sort-by opts) :id)
+        sort-order (or (:sort-order opts) :desc)
+        search-fields (or (:search-fields opts)
+                          (config/get-search-fields entity))
+        conn (:connection cfg)]
+    (if (and table (pos? per-page))
+      (let [offset (* (dec page) per-page)
+            ;; Build WHERE for search
+            [where-sql where-params] (if (and search (not (str/blank? search)) (seq search-fields))
+                                       (let [likes (map #(str (name %) " LIKE ?") search-fields)]
+                                         [(str " WHERE " (str/join " OR " likes))
+                                          (repeat (count search-fields) (str "%" search "%"))])
+                                       ["" []])
+            ;; Build ORDER BY
+            order-str (str " ORDER BY " (name sort-by) " " (name sort-order))
+            ;; Build LIMIT/OFFSET
+            limit-str " LIMIT ? OFFSET ?"
+            ;; Full SQL
+            sql (str "SELECT * FROM " table where-sql order-str limit-str)
+            params (concat where-params [per-page offset])
+            raw-records (Query (into [sql] params) :conn conn)
+            file-fields (file-fields-for-entity entity)
+            records (if (seq file-fields)
+                      (crud/apply-file-links raw-records file-fields)
+                      raw-records)
+            ;; Count total (with same search filter)
+            [count-sql count-params] (if (and search (not (str/blank? search)) (seq search-fields))
+                                       (let [likes (map #(str (name %) " LIKE ?") search-fields)]
+                                         [(str "SELECT COUNT(*) FROM " table " WHERE " (str/join " OR " likes))
+                                          (repeat (count search-fields) (str "%" search "%"))])
+                                       [(str "SELECT COUNT(*) FROM " table) []])
+            total (-> (first (Query (into [count-sql] count-params) :conn conn))
+                      first
+                      val
+                      (or 0))]
+         {:records records
+          :total total
+          :page page
+          :per-page per-page
+          :total-pages (long (Math/ceil (/ (max 1 total) per-page)))})
+      ;; No pagination requested — fall through to normal list
+      (let [records (list-with-hooks entity opts)]
+        {:records records
+         :total (count records)
+         :page 1
+         :per-page 0})))))
 
 (defn get-with-hooks
-  "Gets a record with before-load and after-load hooks."
+  "Gets a record with before-load and after-load hooks.
+   Handles both simple and composite keys."
   [entity id & [opts]]
   (let [config (config/get-entity-config entity)
         hooks (:hooks config)
         before-load (:before-load hooks)
         after-load (:after-load hooks)
+        file-fields (file-fields-for-entity entity)
+        params (parse-composite-id id (:primary-key config))
         result (execute-with-hooks entity
                                    (merge {:query-key :get
-                                           :params [id]
+                                           :params params
                                            :before-hook before-load
                                            :after-hook after-load}
-                                          opts))]
-    (first result)))
+                                          opts))
+        first-row (first result)]
+    (if (and (seq file-fields) first-row)
+      (first (crud/apply-file-links [first-row] file-fields))
+      first-row)))
 
 (comment
   ;; Usage examples

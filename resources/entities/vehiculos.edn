@@ -19,7 +19,8 @@
           {:id :placa :label "Placa" :type :text :placeholder "Placa..."}
           {:id :modelo :label "Modelo" :type :text :placeholder "Modelo..."}
           {:id :anio :label "Anio" :type :number}
-          {:id :activo :label "Activo" :type :number}
+          {:id :activo :label "Activo" :type :checkbox :value 1 :options [{:value 1}
+                                                                          {:value 0}]}
           {:id :rendimientoxkm :label "Rendimiento p/km" :type :decimal}
           {:id :fecha_registro :label "Fecha Registro" :type :hidden}]
 

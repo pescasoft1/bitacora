@@ -6,9 +6,13 @@
    [bitacora.handlers.dashboard.controller :as dashboard]
    [bitacora.handlers.reports.controller :as reports]))
 
-(defroutes proutes
-  (GET "/dashboard" request (dashboard/main request))
+;; All CRUD routes now handled by parameter-driven engine
+;; Add custom non-CRUD routes here if needed
 
+(defroutes proutes
+  ;; Dashboard
+  (GET "/dashboard" req (dashboard/main req))
+  ;; System reports
   (GET  "/cargas-gasolina"              request (cargas-gasolina/index request))
   (GET  "/cargas-gasolina/nuevo"        request (cargas-gasolina/nuevo request))
   (GET  "/cargas-gasolina/editar/:id"   request (cargas-gasolina/editar request))
@@ -24,6 +28,8 @@
   (GET  "/servicios-vehiculo/ver/:id"    request (servicios-vehiculo/ver request))
   (POST "/servicios-vehiculo/guardar"    request (servicios-vehiculo/guardar request))
   (POST "/servicios-vehiculo/eliminar/:id" request (servicios-vehiculo/eliminar request))
-
   (GET "/reports/conductores" request (reports/conductores request))
-  (GET "/reports/control-kilometraje" request (reports/control-kilometraje request)))
+  (GET "/reports/control-kilometraje" request (reports/control-kilometraje request))
+
+  (GET "/reports/users" req (reports/users req))
+  (GET "/reports/audit-log" req (reports/audit-log req)))

@@ -10,6 +10,7 @@
    [bitacora.routes.fk-api :refer [fk-api-routes]]
    [bitacora.engine.router :as engine]
    [bitacora.config.loader :as cfg]
+   [bitacora.i18n.core :as i18n]
    [clojure.string :as str]
    [clojure.java.io :as io]
    [clojure.data.json :as json]
@@ -98,7 +99,7 @@
       (try
         (handler request)
         (catch Exception e
-          (let [rc (root-cause e)
+          (let [rc ^Throwable (root-cause e)
                 exd (ex-data e)
                 csrf? (true? (:invalid-anti-forgery-token exd))
                 sql? (instance? java.sql.SQLException rc)
@@ -106,17 +107,18 @@
                 kind (when sql? (classify-sql rc msg))
                 dd (when (= kind :unique) (dup-details msg))
                 ;; Decide status and friendly message (with localization support)
+                locale (or (:locale (:session request)) :es)
                 [status plain] (cond
-                                 csrf? [403 (cfg/get-error-message :security :csrf :es)]
+                                 csrf? [403 (cfg/get-error-message :security :csrf locale)]
                                  (= kind :unique) [409 (if-let [f (:field dd)]
-                                                         (str (cfg/get-error-message :database :unique :es) " " f)
-                                                         (cfg/get-error-message :database :unique :es))]
-                                 (= kind :fk)     [409 (cfg/get-error-message :database :foreign-key :es)]
-                                 (= kind :not-null) [422 (cfg/get-error-message :database :not-null :es)]
-                                 (= kind :check)  [422 (cfg/get-error-message :database :check :es)]
-                                 (= kind :too-long) [422 (cfg/get-error-message :database :too-long :es)]
-                                 sql? [400 (cfg/get-error-message :database :general :es)]
-                                 :else [400 (cfg/get-error-message :database :general :es)])
+                                                         (str (cfg/get-error-message :database :unique locale) " " f)
+                                                         (cfg/get-error-message :database :unique locale))]
+                                 (= kind :fk)     [409 (cfg/get-error-message :database :foreign-key locale)]
+                                 (= kind :not-null) [422 (cfg/get-error-message :database :not-null locale)]
+                                 (= kind :check)  [422 (cfg/get-error-message :database :check locale)]
+                                 (= kind :too-long) [422 (cfg/get-error-message :database :too-long locale)]
+                                 sql? [400 (cfg/get-error-message :database :general locale)]
+                                 :else [400 (cfg/get-error-message :database :general locale)])
                 body-json (let [base {:ok false :error plain}
                                 base (if dd (merge base dd) base)]
                             (json/write-str base))]
@@ -134,6 +136,18 @@
   [route-fn]
   (fn [routes]
     (route-fn routes)))
+
+(defn wrap-streamable-body
+  "Normalizes known non-streamable response body types to plain strings.
+   This prevents Ring/Jetty from failing when a handler returns hiccup RawString."
+  [handler]
+  (fn [request]
+    (let [resp (handler request)
+          body (:body resp)]
+      (if (and (some? body)
+               (= "hiccup.util.RawString" (.getName (class body))))
+        (assoc resp :body (str body))
+        resp))))
 
 ;; Define the application routes dynamically
 ;; NOTE: Route order matters; more specific routes should come before generic ones.
@@ -171,7 +185,9 @@
 (defn create-app
   []
   (-> (app-routes)
+      (wrap-streamable-body)
       (wrap-multipart-params)
+      (i18n/wrap-locale)
       (wrap-defaults (-> site-defaults
                          (assoc-in [:security :anti-forgery] true)
                          (assoc-in [:session :store] (cookie-store {:key KEY}))
@@ -192,7 +208,7 @@
 (defn -main
   []
   (ensure-upload-dirs!)
-  (jetty/run-jetty app {:port (:port config)}))
+  (jetty/run-jetty app {:host "0.0.0.0" :port (:port config)}))
 
 (comment
   (:port config))

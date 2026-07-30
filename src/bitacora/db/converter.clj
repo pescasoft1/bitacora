@@ -91,7 +91,7 @@
       sql-with-dates)))
 
 (defn parse-migration-number
-  "Extract migration number from filename (e.g., '003' from '003-contactos.sqlite.up.sql')"
+  "Extract migration number from filename (e.g., '003' from '003-bitacora.sqlite.up.sql')"
   [filename]
   (when-let [match (re-find #"^(\d+)-" filename)]
     (second match)))
@@ -115,13 +115,13 @@
 (defn convert-migration-file
   "Convert a single SQLite migration file to target database"
   [sqlite-file target-db]
-  (let [filename (.getName sqlite-file)
+              (let [filename (.getName ^java.io.File sqlite-file)
         migration-num (parse-migration-number filename)
         migration-name (get-migration-name filename)
         direction (if (str/includes? filename ".up.") "up" "down")
         target-ext (name target-db)
         target-filename (str migration-num "-" migration-name "." target-ext "." direction ".sql")
-        target-file (io/file (.getParent sqlite-file) target-filename)
+        target-file (io/file (.getParent ^java.io.File sqlite-file) target-filename)
         sql-content (read-migration-file sqlite-file)
         converted-sql (convert-sql-types sql-content target-db)]
     
@@ -134,16 +134,16 @@
   "Find all SQLite migration files that don't have target database equivalents"
   [migrations-dir target-db]
   (let [all-files (file-seq (io/file migrations-dir))
-        sqlite-files (filter #(and (.isFile %)
-                                   (str/ends-with? (.getName %) ".sqlite.up.sql"))
+        sqlite-files (filter #(and (.isFile ^java.io.File %)
+                                    (str/ends-with? (.getName ^java.io.File %) ".sqlite.up.sql"))
                             all-files)
         target-ext (name target-db)]
     (filter (fn [sqlite-file]
-              (let [filename (.getName sqlite-file)
+  (let [filename (.getName ^java.io.File sqlite-file)
                     migration-num (parse-migration-number filename)
                     migration-name (get-migration-name filename)
                     target-filename (str migration-num "-" migration-name "." target-ext ".up.sql")
-                    target-file (io/file (.getParent sqlite-file) target-filename)]
+                    target-file (io/file (.getParent ^java.io.File sqlite-file) target-filename)]
                 (not (.exists target-file))))
             sqlite-files)))
 
@@ -168,9 +168,9 @@
         
         ;; Also convert .down.sql files
         (doseq [sqlite-file sqlite-files]
-          (let [up-file (.getName sqlite-file)
+          (let [up-file (.getName ^java.io.File sqlite-file)
                 down-filename (str/replace up-file ".up.sql" ".down.sql")
-                down-file (io/file (.getParent sqlite-file) down-filename)]
+                    down-file (io/file (.getParent ^java.io.File sqlite-file) down-filename)]
             (when (.exists down-file)
               (let [result (convert-migration-file down-file target-db)]
                 (println (str "✓ Converted: " (:source result) " → " (:target result)))))))

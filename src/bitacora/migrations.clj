@@ -10,7 +10,7 @@
 (defn migration-files-for-dbtype [dbtype]
   (let [migdir "resources/migrations"
         files (->> (.listFiles (io/file migdir))
-                   (map #(.getName %))
+                   (map #(.getName ^java.io.File %))
                    (filter #(re-find (re-pattern (str ".*\\." dbtype "\\.(up|down)\\.sql$")) %)))]
     (map #(str migdir "/" %) (sort files))))
 

@@ -6,8 +6,8 @@
    [clojure.spec.alpha :as s]))
 
 (s/def ::id keyword?)
-(s/def ::label string?)
-(s/def ::type #{:text :email :password :date :datetime :number :decimal :select :radio :checkbox :textarea :file :hidden :computed})
+(s/def ::label (s/or :string string? :keyword keyword?))
+(s/def ::type #{:text :email :password :date :datetime :number :decimal :select :radio :checkbox :textarea :file :pdf :document :hidden :computed})
 (s/def ::required? boolean?)
 (s/def ::placeholder string?)
 (s/def ::validation (s/or :fn fn? :keyword keyword?))
@@ -53,9 +53,16 @@
 (s/def ::foreign-key keyword?)
 (s/def ::href string?)
 (s/def ::icon string?)
+(s/def ::label string?)
+(s/def ::relationship-type #{:one-to-one :one-to-many :many-to-many})
+(s/def ::through-table keyword?)
+(s/def ::related-entity keyword?)
+(s/def ::related-fk keyword?)
 (s/def ::subgrid
   (s/keys :req-un [::entity ::foreign-key]
-          :opt-un [::title ::href ::icon]))
+          :opt-un [::title ::href ::icon ::label
+                   ::relationship-type ::through-table
+                   ::related-entity ::related-fk]))
 
 (s/def ::subgrids (s/coll-of ::subgrid))
 
@@ -181,8 +188,8 @@
       (case (.getProtocol res)
         "file"
         (->> (file-seq (io/file res))
-             (filter #(and (.isFile %) (.endsWith (.getName %) ".edn")))
-             (map #(.getName %))
+             (filter #(and (.isFile ^java.io.File %) (.endsWith (.getName ^java.io.File %) ".edn")))
+             (map #(.getName ^java.io.File %))
              (map #(-> % (str/replace #"\.edn$" "") keyword))
              sort
              vec)
@@ -192,7 +199,7 @@
               m (re-find #"jar:file:(.+?)!/" url-str)
               jar-path (when m (second m))]
           (when jar-path
-            (with-open [jf (java.util.jar.JarFile. jar-path)]
+            (with-open [jf (java.util.jar.JarFile. ^String jar-path)]
               (->> (.entries jf)
                    enumeration-seq
                    (map #(.getName ^java.util.jar.JarEntry %))
@@ -222,11 +229,16 @@
    :email {:type :email :required? false}
    :password {:type :password :required? true}
    :date {:type :date :required? false}
+   :datetime {:type :datetime :required? false}
    :number {:type :number :required? false}
+   :decimal {:type :decimal :required? false}
    :select {:type :select :required? false :options []}
    :radio {:type :radio :required? false :options []}
+   :checkbox {:type :checkbox :required? false}
    :textarea {:type :textarea :required? false}
    :file {:type :file :required? false}
+   :pdf {:type :pdf :required? false}
+   :document {:type :document :required? false}
    :hidden {:type :hidden}})
 
 (def default-actions
@@ -287,9 +299,22 @@
       (cons id-field limited-fields)
       (take 8 visible-fields))))
 
+(defn get-search-fields
+  "Gets text-based fields suitable for LIKE search.
+   Skips hidden, password, file, computed, and ID fields."
+  [entity]
+  (let [config (get-entity-config entity)
+        searchable-types #{:text :email :textarea :select}
+        search-fields (filter #(searchable-types (:type %)) (:fields config))]
+    (if (seq search-fields)
+      (map :id search-fields)
+      ;; Fallback: use display fields minus id
+      (let [display (get-display-fields entity)]
+        (map :id (remove #(= :id (:id %)) display))))))
+
 (defn get-form-fields
   "Gets fields that should be displayed in forms.
-   Optional exclude-fk-id: FK field to exclude when in subgrid context."
+  Optional exclude-fk-id: FK field to exclude when in subgrid context."
   ([entity] (get-form-fields entity nil))
   ([entity exclude-fk-id]
    (let [config (get-entity-config entity)]

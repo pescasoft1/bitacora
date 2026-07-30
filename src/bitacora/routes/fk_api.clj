@@ -5,11 +5,10 @@
    [bitacora.engine.crud :as crud]
    [bitacora.models.crud :as model-crud]
    [bitacora.models.util :refer [json-response]]
-   [bitacora.i18n.core :as i18n]
    [clojure.string :as str]
    [clojure.data.json :as json]
    [bitacora.engine.render :as render]
-   [hiccup.core :refer [html]]))
+   [hiccup2.core :refer [html]]))
 
 ;; === Helper Functions ===
 (defn- parse-entity-param
@@ -117,27 +116,37 @@
    truthy :success value are considered successful saves.  Anything else is
    reported as an error so the client can display it for debugging."
   [result entity-config data-kw]
-  (cond
-    (and (map? result) (:errors result))
-    (json-response {:ok false :errors (:errors result)})
+  (let [parse-id (fn [v]
+                   (cond
+                     (number? v) (long v)
+                     (string? v) (let [s (str/trim v)]
+                                   (when (re-matches #"\d+" s)
+                                     (Long/parseLong s)))
+                     :else nil))]
+    (cond
+      (and (map? result) (:errors result))
+      (json-response {:ok false :errors (:errors result)})
 
-    (and (map? result) (:success result))
-    ;; success map; determine new-id from known places
-    (let [new-id (or (when (number? (:success result)) (:success result))
-                     (get-in result [:data :id]))
-          new-label (get data-kw
-                         (first (or (:fk-field entity-config) [:nombre])))]
-      (json-response {:ok true :new-id new-id :new-label new-label}))
+      (and (map? result) (:success result))
+      ;; success map; determine new-id from known places
+      (let [new-id (or (parse-id (:success result))
+                       (parse-id (:id result))
+                       (parse-id (get-in result [:data :id])))
+            new-label (get data-kw
+                           (first (or (:fk-field entity-config) [:nombre])))]
+        (json-response {:ok true :new-id new-id :new-label new-label}))
 
-    (map? result)
-    ;; unknown map form
-    (json-response {:ok false :error (str result)})
+      (map? result)
+      ;; unknown map form
+      (json-response {:ok false :error (str result)})
 
-    :else
-    ;; result is not a map; fall back to previous logic
-    (let [new-id (if (number? result) result (first result))
-          new-label (get data-kw (first (or (:fk-field entity-config) [:nombre])))]
-      (json-response {:ok true :new-id new-id :new-label new-label}))))
+      :else
+      ;; result is not a map; fall back to previous logic
+      (let [new-id (or (parse-id result)
+                       (when (sequential? result)
+                         (parse-id (first result))))
+            new-label (get data-kw (first (or (:fk-field entity-config) [:nombre])))]
+        (json-response {:ok true :new-id new-id :new-label new-label})))))
 
 (defn create-fk-record
   "Creates a new FK record via entity hooks."
@@ -177,10 +186,11 @@
               form-fields (map #(select-keys % [:id :label :type :required? :placeholder
                                                 :options :fk :fk-field :fk-parent])
                                fields)
-              rendered (let [render-fn #'bitacora.engine.render/render-field]
+              rendered (let [render-fn #'render/render-field]
+                         ;; Render each field separately and concatenate HTML to avoid fragment artifacts.
                          (->> fields
-                              (map #(render-fn % {}))
-                              (html)))]
+                              (map #(str (html (render-fn % {}))))
+                              (apply str)))]
           (json-response {:ok true
                           :entity entity
                           :title (:title entity-config)

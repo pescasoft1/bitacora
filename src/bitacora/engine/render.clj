@@ -1,12 +1,23 @@
 (ns bitacora.engine.render
   (:require
    [bitacora.engine.config :as config]
-   [bitacora.engine.query :as query]
    [bitacora.models.grid :as grid]
    [bitacora.models.form :as form]
    [bitacora.models.crud :as crud]
    [bitacora.i18n.core :as i18n]
    [clojure.string :as str]))
+
+(defn resolve-label
+  "Resolves a label: if it's a keyword, translates via i18n; if string, returns as-is."
+  [label]
+  (if (keyword? label)
+    (i18n/tr label)
+    label))
+
+(defn resolve-title
+  "Resolves an entity title: if keyword, translates; if string, returns as-is."
+  [title]
+  (resolve-label title))
 
 (defn- load-fk-options
   "Enhanced FK options with sorting, filtering, and parameter binding.
@@ -48,14 +59,14 @@
                           (map #(str (get row % "")))
                           (str/join separator)))]
 
-      (cons {:value "" :label (str "-- " (i18n/tr nil :common/select) " --")}
+      (cons {:value "" :label (str "-- " (i18n/tr :common/select) " --")}
             (map (fn [row]
                    {:value (str (:id row))
                     :label (label-fn row)})
                  rows)))
     (catch Exception e
       (println "[WARN] Could not load enhanced FK options for" fk-entity ":" (.getMessage e))
-      [{:value "" :label (str "-- " (i18n/tr nil :common/select) " --")}])))
+      [{:value "" :label (str "-- " (i18n/tr :common/select) " --")}])))
 
 (defn- populate-fk-options
   "Enhanced population with optional sort/filter parameters.
@@ -89,7 +100,10 @@
 (defn- resolve-options
   [options]
   (cond
-    (vector? options) options
+    (vector? options)
+    (mapv (fn [opt]
+            (update opt :label #(if (keyword? %) (i18n/tr %) %)))
+          options)
     (nil? options) []
     (keyword? options)
     (let [ns-str (namespace options)
@@ -112,7 +126,9 @@
   [field row]
   (let [fk-field? (= :fk (:type field))
         populated-field (if fk-field? (populate-fk-options field) field)
-        {:keys [id label type required? placeholder options value]} populated-field
+        {:keys [id type required? placeholder options value]} populated-field
+        label (resolve-label (:label populated-field))
+        placeholder (if (keyword? placeholder) (i18n/tr placeholder) placeholder)
         field-value (or (get row id) value "")
         resolved-options (if fk-field? options (resolve-options options))]
     (case type
@@ -224,17 +240,18 @@
                          :options resolved-options})
 
       :checkbox
-      (form/build-field {:label label
-                         :type "checkbox"
-                         :id (name id)
-                         :name (name id)
-                         :checked-value (or value "T")
-                         :value field-value})
+      (let [checked-value (or (-> options first :value) value)]
+        (form/build-field {:label label
+                           :type "checkbox"
+                           :id (name id)
+                           :name (name id)
+                           :checked-value checked-value
+                           :value field-value}))
 
-      :file
-      ;; File input with preview
+      (:file :pdf :document)
+      ;; File input with preview (type-appropriate accept and preview)
       (let [filename (cond
-                       ;; Hiccup img vector case: extract src
+                        ;; Hiccup img vector case: extract src
                        (and (vector? field-value)
                             (keyword? (first field-value))
                             (= (first field-value) :img))
@@ -245,7 +262,7 @@
                                first
                                (clojure.string/replace (:path crud/config) ""))))
 
-                       ;; Old HTML string case: parse src from img tag
+                        ;; Old HTML string case: parse src from img tag
                        (and (string? field-value) (re-find #"^<img" field-value))
                        (when-let [match (re-find #"src='([^']+)'" field-value)]
                          (-> (second match)
@@ -253,24 +270,46 @@
                              first
                              (clojure.string/replace (:path crud/config) "")))
 
-                       ;; Plain filename string
-                       :else field-value)]
+                        ;; Plain filename string
+                       :else field-value)
+            is-image? (= type :file)
+            accept-str (case type
+                         :file "image/*"
+                         :pdf ".pdf"
+                         :document ".doc,.docx,.txt,.odt"
+                         "image/*")]
         [:div.mb-3
          [:label.form-label.fw-semibold {:for (name id)} label
           (when required? [:span.text-danger.ms-1 "*"])]
-         (when (and filename (not (map? filename)) (not (empty? filename)))
-           [:div.mb-2
-            [:img {:src (str (:path crud/config) filename "?" (random-uuid))
-                   :alt filename
-                   :style "width: 100%; max-width: 100%; height: auto; border: 1px solid #dee2e6; border-radius: 4px; padding: 4px; cursor: pointer;"
-                   :onclick "window.open(this.src, '_blank')"}]
-            [:div.text-muted.small.mt-1 filename]])
+         (when (and filename (not (map? filename)) (seq filename))
+           (if is-image?
+             [:div.mb-2
+              [:img {:src (str (:path crud/config) filename "?" (random-uuid))
+                     :alt filename
+                     :style "width: 100%; max-width: 100%; height: auto; border: 1px solid #dee2e6; border-radius: 4px; padding: 4px; cursor: pointer;"
+                     :onclick "window.open(this.src, '_blank')"}]
+              [:div.text-muted.small.mt-1 filename]]
+             [:div.mb-2
+              [:a {:href (str (:path crud/config) filename "?" (random-uuid))
+                   :target "_blank"
+                   :class "btn btn-outline-primary btn-sm"}
+               [:i.bi {:class (case (second (re-find #"\.(\w+)$" (str filename)))
+                                "pdf" "bi-file-earmark-pdf"
+                                "doc" "bi-file-earmark-word"
+                                "docx" "bi-file-earmark-word"
+                                "txt" "bi-file-earmark-text"
+                                "odt" "bi-file-earmark-text"
+                                "bi-file-earmark")}]
+               " " filename]]))
          [:input {:type "file"
                   :class "form-control form-control-lg"
                   :id (name id)
                   :name (name id)
-                  :required required?
-                  :accept "image/*"}]])
+                  :required (and required?
+                                 (or (nil? field-value)
+                                     (and (string? field-value) (empty? field-value))
+                                     (and (map? field-value) (not (:tempfile field-value)))))
+                  :accept accept-str}]])
       :computed
       ;; computed fields are displayed but not editable
       [:div.mb-3
@@ -287,14 +326,22 @@
 
 (defn render-form
   "Renders a form for an entity based on its configuration.
-   Optional subgrid-fk: FK field id to hide and render as hidden input instead."
-  ([request entity row] (render-form request entity row nil))
-  ([request entity row subgrid-fk]
+   Optional subgrid-fk: FK field id to hide and render as hidden input instead.
+   Optional return-url: URL to redirect to after saving (used for subgrid forms).
+   Optional active-tab: tab pane id to reactivate after return.
+   Optional edited-id: record id to scroll to on the parent grid after save."
+  ([entity row] (render-form entity row nil nil nil nil))
+  ([entity row subgrid-fk] (render-form entity row subgrid-fk nil nil nil))
+  ([entity row subgrid-fk return-url] (render-form entity row subgrid-fk return-url nil nil))
+  ([entity row subgrid-fk return-url active-tab] (render-form entity row subgrid-fk return-url active-tab nil))
+  ([entity row subgrid-fk return-url active-tab edited-id]
    (let [config (config/get-entity-config entity)
          fields (config/get-form-fields entity subgrid-fk)
          entity-name (name entity)
          href (str "/admin/" entity-name "/save")
-         custom-form-fn (get-in config [:ui :form-fn])]
+         custom-form-fn (get-in config [:ui :form-fn])
+         form-title (str (if (:id row) (i18n/tr :common/edit) (i18n/tr :common/new))
+                         " " (resolve-title (:title config)))]
      (if custom-form-fn
        (custom-form-fn entity row)
        (let [fk-hidden (when (and subgrid-fk (get row subgrid-fk))
@@ -302,18 +349,45 @@
                                             :id (name subgrid-fk)
                                             :name (name subgrid-fk)
                                             :value (get row subgrid-fk)}))
+             return-url-hidden (when return-url
+                                 (form/build-field {:type "hidden"
+                                                    :id "return_url"
+                                                    :name "return_url"
+                                                    :value return-url}))
+             active-tab-hidden (when active-tab
+                                 (form/build-field {:type "hidden"
+                                                    :id "active_tab"
+                                                    :name "active_tab"
+                                                    :value active-tab}))
+             edited-id-hidden (when edited-id
+                                (form/build-field {:type "hidden"
+                                                   :id "edited_id"
+                                                   :name "edited_id"
+                                                   :value edited-id}))
              field-elements (map #(render-field % row) fields)
-             all-elements (if fk-hidden
-                            (cons fk-hidden field-elements)
-                            field-elements)
-             buttons (form/build-modal-buttons request)]
-         (form/form href all-elements buttons))))))
-
-(defn render-form-modal
-  "Renders a form wrapped in a modal."
-  [request title entity row]
-  (let [form-content (render-form request entity row)]
-    (grid/build-modal title row form-content)))
+             all-elements (cond-> field-elements
+                            fk-hidden (as-> els (cons fk-hidden els))
+                            return-url-hidden (as-> els (concat els [return-url-hidden]))
+                            active-tab-hidden (as-> els (concat els [active-tab-hidden]))
+                            edited-id-hidden (as-> els (concat els [edited-id-hidden])))
+             cancel-base (or return-url
+                             (if-let [id (:id row)]
+                               (str "/admin/" entity-name "/" id)
+                               (str "/admin/" entity-name)))
+             cancel-q (str/join "&"
+                                (filter seq [(when active-tab (str "active_tab=" active-tab))]))
+             cancel-fragment (when edited-id (str "#sg-row-" edited-id))
+             cancel-url (cond
+                          (and (seq cancel-q) cancel-fragment)
+                          (str cancel-base "?" cancel-q cancel-fragment)
+                          (seq cancel-q)
+                          (str cancel-base "?" cancel-q)
+                          cancel-fragment
+                          (str cancel-base cancel-fragment)
+                          :else
+                          cancel-base)
+             buttons (form/build-form-buttons {:cancel-url cancel-url})]
+         (form/form href all-elements buttons form-title))))))
 
 (defn- build-fields-map
   "Builds a field map for grid rendering from entity config."
@@ -321,23 +395,26 @@
   (let [display-fields (config/get-display-fields entity)]
     (apply array-map
            (mapcat (fn [field]
-                     [(:id field) (:label field)])
+                     [(:id field) (resolve-label (:label field))])
                    display-fields))))
 
 (defn render-grid
-  "Renders a grid for an entity."
-  [request entity rows]
-  (let [config (config/get-entity-config entity)
-        entity-name (name entity)
-        title (:title config)
-        table-id (str entity-name "_table")
-        fields (build-fields-map entity)
-        href (str "/admin/" entity-name)
-        actions (or (:actions config) config/default-actions)
-        custom-grid-fn (get-in config [:ui :grid-fn])]
-    (if custom-grid-fn
-      (custom-grid-fn entity rows)
-      (grid/build-grid request title rows table-id fields href actions))))
+  "Renders a grid for an entity.
+   If page-info is provided, renders server-paginated grid with sort/search."
+  ([request entity rows]
+   (render-grid request entity rows nil nil))
+  ([request entity rows page-info current-params]
+   (let [config (config/get-entity-config entity)
+         entity-name (name entity)
+         title (resolve-title (:title config))
+         table-id (str entity-name "_table")
+         fields (build-fields-map entity)
+         href (str "/admin/" entity-name)
+         actions (or (:actions config) config/default-actions)
+         custom-grid-fn (get-in config [:ui :grid-fn])]
+     (if custom-grid-fn
+       (custom-grid-fn entity rows)
+       (grid/build-grid request title rows table-id fields href actions page-info current-params)))))
 
 (defn render-dashboard
   "Renders a read-only dashboard for an entity."
@@ -346,51 +423,34 @@
         entity-name (name entity)
         table-id (str entity-name "_dashboard")
         fields (build-fields-map entity)
+        title (resolve-title title)
         custom-dashboard-fn (get-in config [:ui :dashboard-fn])]
     (if custom-dashboard-fn
       (custom-dashboard-fn entity rows)
       (grid/build-dashboard request title rows table-id fields))))
 
 (defn render-report
-  "Renders a report view (alias for dashboard)."
+  "Renders a report view with export buttons."
   [request title entity rows]
-  (render-dashboard request title entity rows))
+  (let [config (config/get-entity-config entity)
+        entity-name (name entity)
+        table-id (str entity-name "_report")
+        fields (build-fields-map entity)
+        title (resolve-title title)]
+    (grid/build-report request title rows table-id fields)))
 
 (defn render-subgrid
   "Renders a subgrid for a parent-child relationship."
   [request entity parent-id rows]
   (let [config (config/get-entity-config entity)
         entity-name (name entity)
-        title (:title config)
+        title (resolve-title (:title config))
         table-id (str entity-name "_subgrid")
         fields (build-fields-map entity)
         href (str "/admin/" entity-name)
         actions (or (:actions config) config/default-actions)
         new-href (str href "/add-form/" parent-id)]
     (grid/build-grid-with-custom-new request title rows table-id fields href actions new-href)))
-
-(defn render-select-list
-  "Renders a simple list for selection (used in modals)."
-  [entity rows select-url]
-  (let [config (config/get-entity-config entity)
-        fields (build-fields-map entity)
-        entity-name (name entity)]
-    [:div.table-responsive
-     [:table.table.table-striped.table-bordered.table-hover
-      [:thead
-       [:tr
-        [:th "Select"]
-        (for [[_ label] fields]
-          [:th label])]]
-      [:tbody
-       (for [row rows]
-         [:tr
-          [:td
-           [:form {:method "get" :action select-url :style "display:inline"}
-            [:input {:type "hidden" :name "id" :value (:id row)}]
-            [:button.btn.btn-sm.btn-success {:type "submit"} "Select"]]]
-          (for [[field-id _] fields]
-            [:td (get row field-id)])])]]]))
 
 (defn render-error
   "Renders an error message."
@@ -412,6 +472,5 @@
   (let [config (config/get-entity-config entity)
         required-rights (:rights config)]
     (render-error
-     (str "Not authorized to access " (:title config)
-          "! Required level(s): " (clojure.string/join ", " required-rights)
-          ". Your level: " user-level))))
+     (str (i18n/tr :error/unauthorized) ": "
+          (resolve-title (:title config))))))

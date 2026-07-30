@@ -1,549 +1,510 @@
 (ns bitacora.models.grid
   (:require
    [clojure.string :as st]
-   [hiccup.util :refer [raw-string]]
-   [ring.util.anti-forgery :refer [anti-forgery-field]]
-   [bitacora.i18n.core :as i18n]))
+   [bitacora.i18n.core :as i18n]
+   [bitacora.models.export :as export]
+   [bitacora.web.csrf :refer [csrf-field]]))
+
+;; =============================================================================
+;; Pagination rendering
+;; =============================================================================
+
+(defn- page-url [base-url params extra-params]
+  (str base-url "?" (st/join "&"
+                             (map (fn [[k v]]
+                                    (str (name k) "=" (java.net.URLEncoder/encode (str v) "UTF-8")))
+                                  (merge params extra-params)))))
+
+(defn- pagination-link [label url active? disabled?]
+  [:li.page-item
+   {:class (str (when active? " active") (when disabled? " disabled"))}
+   (if (or active? disabled?)
+     [:a.page-link {:href "#" :tabindex "-1" :aria-disabled "true"} label]
+     [:a.page-link {:href url} label])])
+
+(defn pagination-bar
+  "Renders a Bootstrap 5 pagination nav.
+   page-info is a map with :page, :total-pages, :per-page, :total.
+   base-url is the URL path to link to.
+   current-params is a map of query params to preserve (search, sort-by, etc)."
+  [page-info base-url current-params]
+  (let [{:keys [page total-pages per-page total]} page-info]
+    (when (and per-page (pos? per-page) total-pages (pos? total-pages))
+      (let [base (dissoc current-params :page)]
+        [:nav {:aria-label "Table pagination"}
+         [:ul.pagination.pagination-sm.justify-content-center.mb-0.flex-wrap
+          (pagination-link "&laquo;" (page-url base-url base {:page 1})
+                           false (= page 1))
+          (pagination-link "&lsaquo;" (page-url base-url base {:page (dec page)})
+                           false (= page 1))
+          (for [p (take 7
+                        (if (<= total-pages 7)
+                          (range 1 (inc total-pages))
+                          (let [start (max 1 (- page 3))
+                                end (min total-pages (+ page 3))]
+                            (if (<= (- end start) 6)
+                              (range start (inc end))
+                              (sort (set (concat (range (max 1 (- page 3)) (inc page))
+                                                 (range page (min (inc total-pages) (+ page 4))))))))))]
+            (pagination-link (str p) (page-url base-url base {:page p})
+                             (= p page) false))
+          (when (> total-pages 7)
+            (pagination-link "&hellip;" "#" false true))
+          (pagination-link "&rsaquo;" (page-url base-url base {:page (inc page)})
+                           false (= page total-pages))
+          (pagination-link "&raquo;" (page-url base-url base {:page total-pages})
+                           false (= page total-pages))]
+         [:div.text-center.text-muted.small.mt-1
+          (i18n/tr :grid/page-of {:page page :total-pages total-pages :total total})]]))))
+
+;; =============================================================================
+;; Sortable column header
+;; =============================================================================
+
+(defn sortable-header
+  "Renders a sortable column header <th> with link.
+   field-id is a keyword, field-label is a string.
+   current-sort-by and current-sort-order control the active sort indicator.
+   base-url is the URL path. current-params preserves existing params."
+  [field-id field-label base-url current-params current-sort-by current-sort-order]
+  (let [field-name (name field-id)
+        is-active (= (name current-sort-by) field-name)
+        new-order (if (and is-active (= current-sort-order :asc)) :desc :asc)
+        sort-icon (cond
+                    (not is-active) nil
+                    (= current-sort-order :asc) [:i.bi.bi-arrow-up.ms-1]
+                    :else [:i.bi.bi-arrow-down.ms-1])
+        params (assoc current-params :sort-by field-name :sort-order (name new-order) :page 1)
+        href (str base-url "?" (st/join "&"
+                                        (map (fn [[k v]]
+                                               (str (name k) "=" (java.net.URLEncoder/encode (str v) "UTF-8")))
+                                             params)))]
+    [:th.text-nowrap.text-uppercase.fw-semibold.px-2
+     {:aria-sort (when is-active
+                   (if (= current-sort-order :asc) "ascending" "descending"))}
+     [:a {:href href
+          :style "color:inherit;text-decoration:none;"}
+      (st/upper-case field-label) sort-icon]]))
+
+;; =============================================================================
+;; Search form
+;; =============================================================================
+
+(defn search-form
+  "Renders a search input above the table."
+  [request base-url current-params]
+  (let [search (get current-params :search "")
+        params (dissoc current-params :search :page)]
+    [:form {:method "GET" :action base-url :class "row gx-2 gy-1 align-items-center mb-3"}
+     (doall
+      (for [[k v] params]
+        [:input {:type "hidden" :name (name k) :value (str v)}]))
+     [:div.col-auto
+      [:div.input-group.input-group-sm
+       [:input.form-control
+        {:type "search" :name "search" :placeholder (i18n/tr :common/search)
+         :value search
+         :aria-label (i18n/tr :common/search)}]
+       [:button.btn.btn-outline-primary {:type "submit"}
+        [:i.bi.bi-search]]]]
+     (when (and search (not (st/blank? search)))
+       [:div.col-auto
+        [:a.btn.btn-sm.btn-outline-danger {:href base-url}
+         [:i.bi.bi-x-lg] (i18n/tr :common/clear)]])]))
+
+;; =============================================================================
+;; Table head (with optional sortable headers)
+;; =============================================================================
 
 (defn build-grid-head
-  [request href fields & args]
-  (let [args (first args)
-        new-record (:new args)]
-    [:thead
+  "Renders a table header row with sortable columns and a New-record action cell.
+   When page-info is provided, columns are rendered as sortable links."
+  [request href fields & [args page-info current-params]]
+  (let [new-record (:new args)
+        {:keys [sort-by sort-order]} page-info]
+    [:thead.table-light
      [:tr
       (for [field fields]
-        [:th.text-nowrap.text-uppercase.fw-semibold
-         {:data-sortable "true"
-          :data-field (key field)}
-         (st/upper-case (val field))])
-      [:th.text-center
+        (if (and page-info sort-by)
+          (sortable-header (key field) (val field) href
+                           (or current-params {})
+                           (keyword (or sort-by :id)) (keyword (or sort-order :desc)))
+          [:th.text-nowrap.text-uppercase.fw-semibold.px-2
+           (st/upper-case (val field))]))
+      [:th.text-center.px-2
        {:style "width:1%; white-space:nowrap; padding-left:0.25rem; padding-right:0.25rem;"}
-       (let [disabled? (not new-record)]
-         [:a.btn.btn-success.btn-lg.fw-semibold.shadow-sm.new-record-btn
-          (merge
-           {:href "#"
-            :tabindex (when disabled? -1)
-            :aria-disabled (when disabled? "true")
-            :class (str "btn btn-success btn-lg fw-semibold shadow-sm new-record-btn"
-                        (when disabled? " disabled"))}
-           (when-not disabled?
-             {:data-url (str href "/add-form")
-              :data-bs-toggle "modal"
-              :data-bs-target "#exampleModal"}))
-          [:i.bi.bi-plus-lg.me-2]
-          (i18n/tr request :common/new)])]]]))
+       (when new-record
+         [:a.btn.btn-success.btn-sm.fw-bold
+          {:href (str href "/add-form") :role "button"}
+          [:i.bi.bi-plus-lg.me-1]
+          (i18n/tr :common/new)])]]]))
+
+;; =============================================================================
+;; Table body
+;; =============================================================================
 
 (defn build-grid-body
-  [request rows href fields & args]
-  (let [args (first args)
-        edit (:edit args)
-        delete (:delete args)
-        field-count (count fields)]
+  "Renders table body rows with edit/delete action buttons.
+   rows is a seq of record maps."
+  [request rows href fields & [args]]
+  (let [{:keys [edit delete]} args]
     [:tbody
-     (if (empty? rows)
-       ;; Show "No data available" message when there are no rows
-       ;; Create individual cells to match header count (DataTable requirement)
-       [:tr
-        ;; First cell with the message
-        [:td.text-center.text-muted
-         [:em (i18n/tr request :grid/no-records)]]
-        ;; Empty cells for remaining data columns
-        (for [_ (range (dec field-count))]
-          [:td.text-center.text-muted ""])
-        ;; Empty cell for actions column
-        [:td.text-center.text-muted ""]]
-       ;; Normal rows when data exists
+      (if (empty? rows)
+        [:tr
+         [:td.text-center.text-muted.py-5
+          {:colspan (+ (count fields) 1)}
+          [:div.grid-empty-state
+           [:i.bi.bi-inbox]
+           [:p (i18n/tr :grid/no-records)]]]]
+        (for [row rows]
+          [:tr
+           (for [field fields]
+             [:td.text-break.align-middle
+              {:data-label (val field)}
+              ((key field) row)])
+            [:td.text-center.align-middle
+             {:data-label (i18n/tr :common/actions)
+              :style "width:1%; white-space:nowrap; padding-left:0.25rem; padding-right:0.25rem;"}
+            [:div.d-flex.justify-content-center.align-items-center.gap-1
+             (when edit
+               [:a.btn.btn-outline-primary.btn-sm.fw-semibold
+                {:href (str href "/edit-form/" (:id row)) :role "button"}
+                [:i.bi.bi-pencil.me-1]
+                (i18n/tr :common/edit)])
+             (when delete
+               [:form {:method "POST"
+                       :action (str href "/delete/" (:id row))
+                       :style "display:inline"
+                       :onsubmit (str "return confirm('" (i18n/tr :confirm/delete) "')")}
+                (csrf-field)
+                [:button.btn.btn-outline-danger.btn-sm.fw-semibold
+                 {:type "submit"}
+                 [:i.bi.bi-trash.me-1]
+                 (i18n/tr :common/delete)]])]]]))]))
+
+;; =============================================================================
+;; Full grid (card + table + pagination + search)
+;; =============================================================================
+
+(defn- render-record-card
+  "Renders a single record as a card."
+  [row fields href actions]
+  (let [{:keys [edit delete]} actions
+        primary-field (first fields)
+        primary-value (when primary-field ((key primary-field) row))]
+    [:div.card.h-100.grid-record-card
+     [:div.card-body
+      [:div.d-flex.justify-content-between.align-items-start.mb-2
+       [:h6.card-title.fw-bold.mb-0 (or primary-value (str "#" (:id row)))]
+       [:span.badge.bg-secondary.rounded-pill (str "#" (:id row))]]
+      (for [field (rest fields)]
+        [:div.mt-2
+         [:small.text-muted.fw-semibold (val field)]
+         [:div.text-truncate ((key field) row)]])
+      [:div.d-flex.gap-2.mt-3.pt-2.border-top
+       (when edit
+         [:a.btn.btn-sm.btn-outline-primary.fw-semibold
+          {:href (str href "/edit-form/" (:id row)) :role "button"}
+          [:i.bi.bi-pencil.me-1]
+          (i18n/tr :common/edit)])
+       (when delete
+         [:form {:method "POST"
+                 :action (str href "/delete/" (:id row))
+                 :style "display:inline"
+                 :onsubmit (str "return confirm('" (i18n/tr :confirm/delete) "')")}
+          (csrf-field)
+          [:button.btn.btn-sm.btn-outline-danger.fw-semibold
+           {:type "submit"}
+           [:i.bi.bi-trash.me-1]
+           (i18n/tr :common/delete)]])]]]))
+
+(defn build-grid-cards
+  "Renders records as a responsive card grid instead of a table."
+  [request title rows fields href actions]
+  [:div.card.shadow-sm.mb-4
+   [:div.card-header.bg-primary.text-white.py-3
+    [:div.d-flex.align-items-center
+     [:h5.mb-0.fw-bold title]
+     [:span.grid-record-count (str (count rows))]]]
+   [:div.card-body.p-3
+    (search-form request href {})
+    (if (empty? rows)
+      [:div.grid-empty-state
+       [:i.bi.bi-inbox]
+       [:p (i18n/tr :grid/no-records)]]
+      [:div.row.g-3
        (for [row rows]
-         [:tr
-          (for [field fields]
-            [:td.text-truncate.align-middle
-             ((key field) row)])
-          [:td.text-center.align-middle
-           {:style "width:1%; white-space:nowrap; padding-left:0.25rem; padding-right:0.25rem;"}
-           [:div.d-flex.justify-content-center.align-items-center.gap-2
-            ;; Edit button
-            (let [disabled? (not edit)]
-              [:a.btn.btn-warning.btn-lg.fw-semibold.shadow-sm.rounded-pill.edit-record-btn
-               (merge
-                {:href "#"
-                 :tabindex (when disabled? -1)
-                 :aria-disabled (when disabled? "true")
-                 :class (str "btn btn-warning btn-lg fw-semibold shadow-sm rounded-pill edit-record-btn"
-                             (when disabled? " disabled"))}
-                (when-not disabled?
-                  {:data-url (str href "/edit-form/" (:id row))
-                   :data-bs-toggle "modal"
-                   :data-bs-target "#exampleModal"}))
-               [:i.bi.bi-pencil.me-2]
-               (i18n/tr request :common/edit)])
-            ;; Delete button
-            (let [disabled? (not delete)]
-              [:form {:method "POST"
-                      :action (str href "/delete/" (:id row))
-                      :style "display:inline"
-                      :onsubmit "return confirm('Are you sure?')"}
-               (raw-string (anti-forgery-field))
-               [:button.btn.btn-danger.btn-lg.fw-semibold.shadow-sm.rounded-pill
-                {:type "submit"
-                 :tabindex (when disabled? -1)
-                 :disabled disabled?
-                 :class (str "btn btn-danger btn-lg fw-semibold shadow-sm rounded-pill"
-                             (when disabled? " disabled"))}
-                [:i.bi.bi-trash.me-2]
-                (i18n/tr request :common/delete)]])]]]))]))
+         [:div.col-sm-6.col-lg-4.col-xl-3
+          (render-record-card row fields href actions)])])]])
 
-;; --- Unified Table Head ---
-(defn unified-table-head
-  [request fields & [{:keys [actions? new? href]}]]
-  [:thead
-   [:tr
-    (for [field fields]
-      [:th.text-nowrap.text-uppercase.fw-semibold.px-2
-       {:data-sortable "true"
-        :data-field (key field)}
-       (st/upper-case (val field))])
-    (when actions?
-      [:th.text-center.px-2
-       {:style "width:1%; white-space:nowrap; padding-left:0.25rem; padding-right:0.25rem;"}
-       [:div.d-flex.justify-content-center.align-items-center
-        (let [disabled? (not new?)]
-          [:a.btn.btn-success.btn-lg.fw-semibold.shadow-sm.new-record-btn
-           (merge
-            {:href "#"
-             :tabindex (when disabled? -1)
-             :aria-disabled (when disabled? "true")
-             :class (str "btn btn-success btn-lg fw-semibold shadow-sm new-record-btn"
-                         (when disabled? " disabled"))}
-            (when-not disabled?
-              {:data-url (str href "/add-form")
-               :data-bs-toggle "modal"
-               :data-bs-target "#exampleModal"}))
-           [:i.bi.bi-plus-lg.me-2]
-           (i18n/tr request :common/new)])]])]])
-
-;; --- Unified Table Body ---
-(defn unified-table-body
-  [rows fields]
-  [:tbody
-   (for [row rows]
-     [:tr
-      (for [field fields]
-        [:td.text-truncate.align-middle
-         ((key field) row)])])])
-
-;; --- Unified Grid ---
 (defn build-grid
-  [request title rows table-id fields href & [args]]
-  (let [args (or args {})]
-    [:div.card.shadow.mb-4
-     [:div.card-body.bg-gradient.bg-primary.text-white.rounded-top
-      [:h4.mb-0.fw-bold title]]
-     [:div.p-3.bg-white.rounded-bottom
-      [:div.table-responsive
-       [:table.table.table-hover.table-bordered.table-striped.table-sm.compact.align-middle.display.dataTable.w-100
-        {:id table-id}
-        (unified-table-head request fields {:actions? true :new? (:new args) :href href})
-        (build-grid-body request rows href fields args)]]]]))
+  "Renders a complete grid with search, sortable table, and pagination.
+   Uses card view for small datasets (≤12 records) and table view for larger ones.
+   Args:
+   - request: Ring request
+   - title: String heading
+   - rows: Collection of record maps
+   - table-id: String DOM id
+   - fields: Array-map of {keyword label}
+   - href: String base URL path
+   - args: Map with :new, :edit, :delete booleans
+   - page-info: Optional map with :page, :per-page, :total, :total-pages, :sort-by, :sort-order
+   - current-params: Optional map of current query params (search, sort, etc.)"
+  [request title rows table-id fields href & [args page-info current-params]]
+  (let [args (or args {})
+        total (or (:total page-info) (count rows))]
+    ;; Use card view for small datasets without pagination
+    (if (and (<= total 12) (not page-info))
+      [:div.card.shadow-sm.mb-4
+       [:div.card-header.bg-primary.text-white.py-3
+        [:div.d-flex.align-items-center
+         [:h5.mb-0.fw-bold title]
+         [:span.grid-record-count (str total)]]]
+       [:div.card-body.p-3
+        (search-form request href (or current-params {}))
+        (if (empty? rows)
+          [:div.grid-empty-state
+           [:i.bi.bi-inbox]
+           [:p (i18n/tr :grid/no-records)]]
+          [:div.row.g-3
+           (for [row rows]
+             [:div.col-sm-6.col-lg-4.col-xl-3
+              (render-record-card row fields href args)])])]]
+      ;; Use table view for larger datasets or when paginated
+      [:div.card.shadow-sm.mb-4
+       [:div.card-header.bg-primary.text-white.py-3
+        [:div.d-flex.align-items-center
+         [:h5.mb-0.fw-bold title]
+         [:span.grid-record-count (str total)]]]
+       [:div.card-body.p-3
+        (search-form request href (or current-params {}))
+        [:div.table-responsive
+         [:table.table.table-hover.table-sm.align-middle.w-100.mb-0
+          {:id table-id}
+          (build-grid-head request href fields args page-info current-params)
+          (build-grid-body request rows href fields args)]]
+        (when page-info
+          (pagination-bar page-info href (or current-params {})))]])))
 
-;; --- Unified Dashboard ---
+;; =============================================================================
+;; Dashboard (read-only table, no actions)
+;; =============================================================================
+
 (defn build-dashboard
+  "Renders a read-only dashboard table."
   [request title rows table-id fields]
-  [:div.card.shadow.mb-4
-   [:div.card-body.bg-gradient.bg-primary.text-white.rounded-top
-    [:h4.mb-0.fw-bold title]]
-   [:div.p-3.bg-white.rounded-bottom
+  [:div.card.shadow-sm.mb-4
+   [:div.card-header.bg-primary.text-white.py-3
+    [:h5.mb-0.fw-bold title]]
+   [:div.card-body.p-3
     [:div.table-responsive
-     [:table.table.table-hover.table-bordered.table-striped.table-sm.compact.align-middle.display.dataTable.w-100
+     [:table.table.table-hover.table-sm.align-middle.w-100.mb-0
       {:id table-id}
-      (unified-table-head request fields)
-      (unified-table-body rows fields)]]]])
+      [:thead.table-light
+       [:tr
+        (for [field fields]
+          [:th.text-nowrap.text-uppercase.fw-semibold.px-2
+           (st/upper-case (val field))])]]
+      [:tbody
+       (if (empty? rows)
+         [:tr
+          [:td.text-center.text-muted.py-5
+           {:colspan (count fields)}
+           [:div.grid-empty-state
+            [:i.bi.bi-inbox]
+            [:p (i18n/tr :grid/no-records)]]]]
+          (for [row rows]
+            [:tr
+             (for [field fields]
+               [:td.text-truncate.align-middle
+                {:data-label (val field)}
+                ((key field) row)])]))]]]]])
 
-(defn build-modal
-  [title _ form]
-  (list
-   [:div.modal.fade {:id "exampleModal"
-                     :data-bs-backdrop "static"
-                     :data-bs-keyboard "false"
-                     :tabindex "-1"
-                     :aria-labelledby "exampleModalLabel"
-                     :aria-hidden "true"}
-    [:div.modal-dialog.modal-dialog-centered {:style "max-width: 700px; width: 100%;"}
-     [:div.modal-content
-      [:div.modal-header.bg-primary.text-white
-       [:h1.modal-title.fs-5.fw-bold {:id "exampleModalLabel"
-                                      :style "margin: 0;
-                                             font-size: 1.25rem;
-                                             text-shadow: 0 1px 3px rgba(0,0,0,0.2);
-                                             letter-spacing: 0.025em;"}
-        title]
-       [:button.btn-close
-        {:type "button"
-         :data-bs-dismiss "modal"
-         :aria-label "Close"}]]
-      [:div.modal-body.p-0.w-100
-       (if (and (vector? form) (#{:div :form} (first form)))
-         (let [[tag attrs & body] form
-               class-str (-> (or (:class attrs) "")
-                             (clojure.string/replace #"container-fluid" "")
-                             (clojure.string/replace #"container" "")
-                             (clojure.string/replace #"d-flex" "")
-                             (clojure.string/replace #"justify-content-center" "")
-                             (clojure.string/replace #"align-items-center" "")
-                             (str " w-100")
-                             clojure.string/trim)
-               new-attrs (assoc attrs :class class-str)]
-           (into [tag new-attrs] body))
-         [:div.w-100 form])]]]]))
+;; =============================================================================
+;; Report (read-only table with export buttons)
+;; =============================================================================
 
-(defn modal-script
-  []
-  [:script
-   "
-   const myModal = new bootstrap.Modal(document.getElementById('exampleModal'), {
-    keyboard: false
-   })
-   myModal.show();
-   "])
+(defn- build-query-string
+  "Builds a URL query string from a map of params, URL-encoding values."
+  [params]
+  (when (seq params)
+    (st/join "&"
+             (map (fn [[k v]]
+                    (str (name k) "=" (java.net.URLEncoder/encode (str v) "UTF-8")))
+                  params))))
 
-;; --- Enhanced Grid Head with Custom New Record URL ---
-(defn build-grid-head-with-custom-new
-  [request fields args href custom-new-url]
-  (let [{:keys [new edit delete]} args]
-    [:thead
-     [:tr
-      (for [field fields]
-        [:th.text-nowrap.text-uppercase.fw-semibold.px-2
-         {:data-sortable "true"
-          :data-field (key field)}
-         (st/upper-case (val field))])
-      [:th.text-center.px-2
-       {:style "width:1%; white-space:nowrap; padding-left:0.25rem; padding-right:0.25rem;"}
-       [:div.d-flex.justify-content-center.align-items-center
-        (let [disabled? (not new)]
-          [:a.btn.btn-success.btn-lg.fw-semibold.shadow-sm.new-record-btn
-           (merge
-            {:href "#"
-             :tabindex (when disabled? -1)
-             :aria-disabled (when disabled? "true")
-             :class (str "btn btn-success btn-lg fw-semibold shadow-sm new-record-btn"
-                         (when disabled? " disabled"))}
-            (when-not disabled?
-              {:data-url custom-new-url
-               :data-bs-toggle "modal"
-               :data-bs-target "#exampleModal"}))
-           [:i.bi.bi-plus-lg.me-2]
-           (i18n/tr request :common/new)])]]]]))
+(defn- filter-rows
+  "Filters rows where any field value contains search string (case-insensitive)."
+  [rows fields search]
+  (let [s (st/lower-case search)]
+    (filter (fn [row]
+              (some (fn [[k _]]
+                      (let [v (str (get row k ""))]
+                        (st/includes? (st/lower-case v) s)))
+                    fields))
+            rows)))
 
-;; --- Build Grid with Custom New Record URL ---
-(defn build-grid-with-custom-new
-  [request title rows table-id fields href args custom-new-url]
-  [:div.card.shadow.mb-4
-   [:div.card-body.bg-gradient.bg-primary.text-white.rounded-top
-    [:h4.mb-0.fw-bold title]]
-   [:div.p-3.bg-white.rounded-bottom
-    [:div.table-responsive
-     [:table.table.table-hover.table-bordered.table-striped.table-sm.compact.align-middle.display.dataTable.w-100
-      {:id table-id}
-      (build-grid-head-with-custom-new request fields args href custom-new-url)
-      (build-grid-body request rows href fields args)]]]])
+(defn- sort-rows
+  "Sorts rows by field-key, case-insensitive, in the given direction."
+  [rows field-key direction]
+  (let [key-fn #(st/lower-case (str (get % field-key "")))]
+    (if (= direction :desc)
+      (reverse (sort-by key-fn (remove nil? rows)))
+      (sort-by key-fn (remove nil? rows)))))
 
-(defn build-subgrid-trigger
-  "Creates a trigger button/link to open a subgrid for a specific parent record"
-  [parent-record subgrid-config]
-  (let [{:keys [title table-name parent-entity href icon label]} subgrid-config
-        parent-id (get parent-record (keyword (:primary-key subgrid-config "id")))
-        subgrid-url (str href "?parent_id=" parent-id
-                         (when parent-entity (str "&parent_entity=" parent-entity)))]
-    [:button.btn.btn-info.btn-sm.me-1
-     {:type "button"
-      :data-subgrid-url subgrid-url
-      :data-parent-id parent-id
-      :data-subgrid-title (str title " for " (or (:name parent-record)
-                                                 (:lastname parent-record)
-                                                 (:title parent-record)
-                                                 (str "Record #" parent-id)))
-      :data-bs-toggle "modal"
-      :data-bs-target "#subgridModal"}
-     [:i {:class (or icon "bi bi-list-ul")}]
-     (when label [:span.ms-1 label])]))
-
-(defn build-enhanced-grid-body
-  "Enhanced grid body that includes subgrid triggers"
-  [request rows href fields args subgrid-configs]
-  [:tbody
-   (for [row rows]
-     [:tr
-      (for [field fields]
-        [:td.text-truncate.align-middle
-         ((key field) row)])
-      [:td.text-center.align-middle
-       {:style "width:1%; white-space:nowrap; padding-left:0.25rem; padding-right:0.25rem;"}
-       [:div.d-flex.justify-content-center.align-items-center.gap-1
-        ;; Subgrid triggers
-        (for [subgrid-config subgrid-configs]
-          (build-subgrid-trigger row subgrid-config))
-        ;; Original action buttons
-        (let [edit (:edit args)
-              delete (:delete args)]
-          ;; Edit button
-          (let [disabled? (not edit)]
-            [:a.btn.btn-warning.btn-sm.fw-semibold.shadow-sm.rounded-pill.edit-record-btn
-             (merge
-              {:href "#"
-               :tabindex (when disabled? -1)
-               :aria-disabled (when disabled? "true")
-               :class (str "btn btn-warning btn-sm fw-semibold shadow-sm.rounded-pill edit-record-btn"
-                           (when disabled? " disabled"))}
-              (when-not disabled?
-                {:data-url (str href "/edit-form/" (:id row))
-                 :data-bs-toggle "modal"
-                 :data-bs-target "#exampleModal"}))
-             [:i.bi.bi-pencil.me-1]
-             (i18n/tr request :common/edit)])
-          ;; Delete button
-          (let [disabled? (not delete)]
-            [:form {:method "POST"
-                    :action (str href "/delete/" (:id row))
-                    :style "display:inline"
-                    :onsubmit "return confirm('Are you sure?')"}
-             (raw-string (anti-forgery-field))
-             [:button.btn.btn-danger.btn-sm.fw-semibold.shadow-sm.rounded-pill
-              {:type "submit"
-               :tabindex (when disabled? -1)
-               :disabled disabled?
-               :class (str "btn btn-danger btn-sm fw-semibold shadow-sm.rounded-pill"
-                           (when disabled? " disabled"))}
-              [:i.bi.bi-trash.me-1]
-              (i18n/tr request :common/delete)]]))]]])])
-
-(defn build-subgrid-modal
-  "Modal container for subgrids"
-  [subgrid-url]
-  [:div.modal.fade {:id "subgridModal"
-                    :data-bs-backdrop "static"
-                    :data-bs-keyboard "false"
-                    :tabindex "-1"
-                    :aria-labelledby "subgridModalLabel"
-                    :aria-hidden "true"}
-   [:div.modal-dialog.modal-xl.modal-dialog-centered
-    [:div.modal-content
-     [:div.modal-header.bg-info.text-white
-      [:h1.modal-title.fs-5.fw-bold {:id "subgridModalLabel"} "Subgrid"]
-      [:button.btn-close
-       {:type "button"
-        :data-bs-dismiss "modal"
-        :aria-label "Close"}]]
-     [:div.modal-body.p-2
-      [:div#subgrid-content {:data-url subgrid-url}
-       [:div.text-center.p-4
-        [:div.spinner-border.text-primary {:role "status"}]
-        [:div.mt-2 "Loading..."]]]]
-     [:div.modal-footer
-      [:button.btn.btn-secondary
-       {:type "button"
-        :data-bs-dismiss "modal"}
-       "Close"]]]]])
-
-(defn subgrid-javascript
-  "JavaScript to handle subgrid interactions"
-  []
-  [:script
-   "
-   // Wait for jQuery to be available before executing
-   function waitForJQuery() {
-     if (typeof $ !== 'undefined') {
-       // jQuery is available, initialize subgrid functionality
-       $(document).ready(function() {
-         // Handle subgrid button clicks
-         $(document).on('click', '[data-subgrid-url]', function(e) {
-           e.preventDefault();
-           var url = $(this).data('subgrid-url');
-           var title = $(this).data('subgrid-title');
-           var modal = $('#subgridModal');
-           
-           // Store the current subgrid URL for refreshing after saves
-           modal.data('current-subgrid-url', url);
-           
-           // Set modal title
-           modal.find('#subgridModalLabel').text(title);
-           
-           // Show loading spinner
-modal.find('#subgrid-content').html(
-              \"<div class='text-center p-4'>\" +
-              \"<div class='spinner-border text-primary' role='status'></div>\" +
-              \"<div class='mt-2'>Loading...</div>\" +
-              \"</div>\"
-            );
-            // Load subgrid content
-           $.ajax({
-             url: url,
-             type: 'GET',
-             xhrFields: {
-               withCredentials: true
-             },
-             success: function(data, textStatus, jqXHR) {
-               // Check if response is a redirect to login (authentication issue)
-               if (typeof data === 'string' && (data.includes('home/login') || data.includes('Login') || data.includes('username') && data.includes('password'))) {
-modal.find('#subgrid-content').html(
-                    \"<div class='alert alert-warning'>\" +
-                    \"<i class='bi bi-exclamation-triangle'></i>\" +
-                    \"Session expired. Please refresh the page and log in again.\" +
-                    \"</div>\"
-                  );
-                 return;
-               }
-               
-               modal.find('#subgrid-content').html(data);
-               
-               // Initialize DataTable for subgrid if it has a table
-               var subTable = modal.find('table.dataTable');
-               if (subTable.length > 0 && !$.fn.DataTable.isDataTable(subTable)) {
-                 subTable.DataTable({
-                   responsive: true,
-                   pageLength: 10,
-                   language: window.i18nStrings ? window.i18nStrings : {
-                     emptyTable: 'No data available in table',
-                     info: 'Showing _START_ to _END_ of _TOTAL_ entries',
-                     infoEmpty: 'Showing 0 to 0 of 0 entries',
-                     infoFiltered: '(filtered from _MAX_ total entries)',
-                     lengthMenu: 'Show _MENU_ entries',
-                     search: 'Search:',
-                     zeroRecords: 'No matching records found',
-                     paginate: {
-                       previous: '<i class=\\'bi bi-chevron-left\\'></i>',
-                       next: '<i class=\\'bi bi-chevron-right\\'></i>'
-                     }
-                   }
-                 });
-               }
-             },
-             error: function(jqXHR, textStatus, errorThrown) {
-               console.log('Subgrid load failed:', textStatus, errorThrown, jqXHR.status);
-               if (jqXHR.status === 302 || jqXHR.status === 401) {
-                 modal.find('#subgrid-content').html(`
-                   <div class='alert alert-warning'>
-                     <i class='bi bi-exclamation-triangle'></i>
-                     Authentication required. Please refresh the page and log in again.
-                   </div>
-                 `);
-               } else {
-modal.find('#subgrid-content').html(
-                    \"<div class='alert alert-danger'>\" +
-                    \"<i class='bi bi-exclamation-triangle'></i>\" +
-                    \"Error loading subgrid content. Status: \" + jqXHR.status +
-                    \"</div>\"
-                  );
-               }
-             }
-           });
-         });
-         
-         // Handle modal cleanup
-         $('#subgridModal').on('hidden.bs.modal', function() {
-           // Destroy any DataTables in the subgrid to prevent conflicts
-           var subTable = $(this).find('table.dataTable');
-           if (subTable.length > 0 && $.fn.DataTable.isDataTable(subTable)) {
-             subTable.DataTable().destroy();
-           }
-           
-           // Clear the stored URL
-           $(this).removeData('current-subgrid-url');
-         });
-       });
-     } else {
-       // jQuery not available yet, wait a bit and try again
-       setTimeout(waitForJQuery, 100);
-     }
-   }
-   
-   // Start waiting for jQuery
-   waitForJQuery();
-   "])
-
-(defn build-grid-with-subgrids
-  "Enhanced version of build-grid that supports subgrids.
-   Expects subgrid configs in the :subgrids key of args."
-  [request title rows table-id fields href args]
-  (let [subgrid-configs (:subgrids args)
-        base-grid (build-grid request title rows table-id fields href args)
-        has-subgrids? (seq subgrid-configs)]
-    (if-not has-subgrids?
-      base-grid
-      ;; Add subgrid functionality to existing grid
-      (let [enhanced-body (build-enhanced-grid-body request rows href fields args subgrid-configs)]
-        [:div
-         ;; Main grid with enhanced body
-         [:div.card.shadow.mb-4
-          [:div.card-body.bg-gradient.bg-primary.text-white.rounded-top
-           [:h4.mb-0.fw-bold title]]
-          [:div.p-3.bg-white.rounded-bottom
+(defn build-report
+  "Renders a read-only report table with export buttons, search, and sort.
+   Automatically handles ?export=csv, ?export=pdf, ?search=, ?sort-by=, and
+   ?sort-order= query parameters from the request.
+   Optional page-info and current-params can override auto-detection."
+  [request title rows table-id fields & [page-info current-params]]
+  (let [cp (or current-params
+               (let [qp (:query-params request)]
+                 (reduce-kv (fn [m k v]
+                              (if (contains? #{"search" "sort-by" "sort-order"} k)
+                                (assoc m (keyword k) v)
+                                m))
+                            {} (or qp {}))))
+        search (get cp :search)
+        rows (if (and search (not (st/blank? (str search))))
+               (filter-rows rows fields search)
+               rows)
+        sort-by-field (get cp :sort-by)
+        sort-order (get cp :sort-order "asc")
+        rows (if sort-by-field
+               (sort-rows rows (keyword sort-by-field) (keyword sort-order))
+               rows)
+        pi (or page-info
+               (cond-> {}
+                 sort-by-field (assoc :sort-by sort-by-field :sort-order sort-order)))
+        export-fmt (get-in request [:query-params "export"])]
+    (case export-fmt
+      "csv"
+      (let [csv-str (export/rows->csv rows fields)]
+        {:type :response
+         :response {:status 200
+                    :headers {"Content-Type" "text/csv; charset=utf-8"
+                              "Content-Disposition" (str "attachment; filename=\"" table-id ".csv\"")}
+                    :body csv-str}})
+      "pdf"
+      (let [pdf-bytes (export/rows->pdf title rows fields)]
+        {:type :response
+         :response {:status 200
+                    :headers {"Content-Type" "application/pdf"
+                              "Content-Disposition" (str "attachment; filename=\"" table-id ".pdf\"")}
+                    :body pdf-bytes}})
+      ;; Default: render HTML with search and sort
+      (let [base-url (:uri request)
+            qs (build-query-string (dissoc cp :export))
+            export-base (str base-url (when qs (str "?" qs)))]
+        {:type :html
+         :content
+         [:div.card.shadow-sm.mb-4
+          [:style "@media print{nav.navbar,footer,#export-toolbar,.search-form{display:none!important}body{overflow:visible!important}.container-fluid.pt-3{overflow:visible!important}.card{box-shadow:none!important;border:1px solid #dee2e6}.card-header.bg-primary{background:#0d6efd!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.table-responsive{overflow:visible!important}.report-content{max-height:none!important;overflow:visible!important}}"]
+          [:div.card-header.bg-primary.text-white.py-3.d-flex.justify-content-between.align-items-center
+           [:h5.mb-0.fw-bold title]
+           [:div#export-toolbar.d-flex.gap-1
+            [:a.btn.btn-sm.btn-light {:href (str export-base (if qs "&" "?") "export=csv") :role "button"}
+             [:i.bi.bi-file-earmark-spreadsheet.me-1] (i18n/tr :common/export)]
+            [:a.btn.btn-sm.btn-light {:href (str export-base (if qs "&" "?") "export=pdf") :role "button"}
+             [:i.bi.bi-file-earmark-pdf.me-1] "PDF"]
+            [:button.btn.btn-sm.btn-light {:type "button" :onclick "window.print()"}
+             [:i.bi.bi-printer.me-1] (i18n/tr :common/print)]]]
+          [:div.card-body.p-3
+           [:div.search-form (search-form request base-url cp)]
            [:div.table-responsive
-            [:table.table.table-hover.table-bordered.table-striped.table-sm.compact.align-middle.display.dataTable.w-100
+            [:table.table.table-hover.table-sm.align-middle.w-100.mb-0
              {:id table-id}
-             (unified-table-head request fields {:actions? true :new? (:new args) :href href})
-             enhanced-body]]]]
-         ;; Subgrid modal
-         (build-subgrid-modal (get-in (first subgrid-configs) [:href]))
-         ;; Subgrid JavaScript
-         (subgrid-javascript)]))))
+             [:thead.table-light
+              [:tr
+               (for [field fields]
+                 (sortable-header (key field) (val field) base-url cp
+                                  (keyword (or (:sort-by pi) "id"))
+                                  (keyword (or (:sort-order pi) "asc"))))]]
+             [:tbody
+              (if (empty? rows)
+                [:tr
+                 [:td.text-center.text-muted.py-5
+                  {:colspan (count fields)}
+                  [:div.grid-empty-state
+                   [:i.bi.bi-inbox]
+                   [:p (i18n/tr :grid/no-records)]]]]
+                (for [row rows]
+                  [:tr
+                   (for [field fields]
+                     (let [cell-fn (get-in pi [:cell-fn (key field)])]
+                       [:td.text-break.align-middle
+                        {:data-label (val field)}
+                        (if cell-fn (cell-fn row) ((key field) row))]))]))]]]]]}))))
 
-(defn create-subgrid-config
-  "Helper to create subgrid configuration"
-  [options]
-  (merge
-   {:primary-key "id"
-    :icon "bi bi-list-ul"
-    :label nil}
-   options))
+;; =============================================================================
+;; Grid with custom new-record URL (used by render-subgrid in tabgrid)
+;; =============================================================================
 
-(defn users-with-roles-subgrid
-  "Example: Users grid with roles subgrid"
-  [request title rows]
-  (let [table-id "users_table"
-        labels ["lastname" "name" "username" "DOB" "Cell Phone" "Level" "status"]
-        db-fields [:lastname :firstname :username :dob_formatted :cell :level_formatted :active_formatted]
-        fields (apply array-map (interleave db-fields labels))
-        args {:new true :edit true :delete true}
-        href "/admin/users"
-        ;; Define subgrid for user roles
-        roles-subgrid (create-subgrid-config
-                       {:title "User Roles"
-                        :table-name "user_roles"
-                        :foreign-key "user_id"
-                        :href "/admin/users/roles"
-                        :icon "bi bi-person-badge"
-                        :label "Roles"})]
-    (build-grid-with-subgrids request title rows table-id fields href (assoc args :subgrids [roles-subgrid]))))
+(defn build-grid-with-custom-new
+  "Builds a grid with a custom new-record URL.
+   Used by render-subgrid for subgrid forms.
+   Uses card view for small datasets (≤12 records) and table view for larger ones."
+  [request title rows table-id fields href args custom-new-url]
+  (let [new? (:new args)
+        total (count rows)
+        actions (assoc args :new false)]
+    ;; Use card view for small datasets
+    (if (<= total 12)
+      [:div.card.shadow-sm.mb-4
+       [:div.card-header.bg-primary.text-white.py-3
+        [:div.d-flex.align-items-center
+         [:h5.mb-0.fw-bold title]
+         [:span.grid-record-count (str total)]
+         (when new?
+           [:a.btn.btn-success.btn-sm.fw-bold.ms-auto
+            {:href custom-new-url :role "button"}
+            [:i.bi.bi-plus-lg.me-1]
+            (i18n/tr :common/new)])]]
+       [:div.card-body.p-3
+        (if (empty? rows)
+          [:div.grid-empty-state
+           [:i.bi.bi-inbox]
+           [:p (i18n/tr :grid/no-records)]]
+          [:div.row.g-3
+           (for [row rows]
+             [:div.col-sm-6.col-lg-4.col-xl-3
+              (render-record-card row fields href actions)])])]]
+      ;; Use table view for larger datasets
+      [:div.card.shadow-sm.mb-4
+       [:div.card-header.bg-primary.text-white.py-3
+        [:div.d-flex.align-items-center
+         [:h5.mb-0.fw-bold title]
+         [:span.grid-record-count (str total)]]]
+       [:div.card-body.p-3
+        [:div.table-responsive
+         [:table.table.table-hover.table-sm.align-middle.w-100.mb-0
+          {:id table-id}
+          [:thead.table-light
+           [:tr
+            (for [field fields]
+              [:th.text-nowrap.text-uppercase.fw-semibold.px-2
+               (st/upper-case (val field))])
+            [:th.text-center.px-2
+             {:style "width:1%; white-space:nowrap; padding-left:0.25rem; padding-right:0.25rem;"}
+             [:div.d-flex.justify-content-center.align-items-center
+              (when new?
+                [:a.btn.btn-success.btn-sm.fw-bold
+                 {:href custom-new-url :role "button"}
+                 [:i.bi.bi-plus-lg.me-1]
+                 (i18n/tr :common/new)])]]]]
+         (build-grid-body request rows href fields args)]]]])))
 
 (comment
-  ;; Example usage for main functions in this file
-
-  (build-grid
-   "Employee List"
-   [{:id 1 :name "Alice" :email "alice@example.com"}
-    {:id 2 :name "Bob" :email "bob@example.com"}]
-   "employee_table"
-   [[:name "Name"] [:email "Email"]]
-   "/employees"
-   {:new true :edit true :delete true})
-
-  (build-dashboard
-   nil ; request parameter
-   "Employee Dashboard"
-   [{:id 1 :name "Alice" :email "alice@example.com"}
-    {:id 2 :name "Bob" :email "bob@example.com"}]
-   "dashboard_table"
-   [[:name "Name"] [:email "Email"]])
-
-  (build-modal
-   "Edit Employee"
-   nil
-   [:form
-    {:method "POST" :action "/employees/edit"}
-    [:div.mb-3
-     [:label.form-label.fw-semibold {:for "name"} "Name"]
-     [:input.form-control.form-control-lg {:type "text" :id "name" :name "name" :placeholder "Enter name..." :required true :value ""}]]
-    [:div.mb-3
-     [:label.form-label.fw-semibold {:for "email"} "Email"]
-     [:input.form-control.form-control-lg {:type "email" :id "email" :name "email" :placeholder "Enter email..." :required true :value ""}]]
-    [:button.btn.btn-primary {:type "submit"} "Save"]]))
+  ;; Usage examples for pagination-bar
+  (pagination-bar {:page 1 :total-pages 5 :per-page 10 :total 42}
+                  "/admin/users" {:search "john" :sort-by "name" :sort-order "asc"})
+  ;; Usage examples for build-grid
+  (build-grid nil "Users"
+              [{:id 1 :name "Alice"} {:id 2 :name "Bob"}]
+              "users-table"
+              (array-map :id "Id" :name "Name")
+              "/admin/users"
+              {:new true :edit true :delete true}
+              {:page 1 :per-page 10 :total 2 :total-pages 1 :sort-by "name" :sort-order "asc"}
+              {:search ""}))

@@ -31,19 +31,13 @@
                "journal" "litera" "lumen" "lux" "materia" "minty"
                "morph" "pulse" "quartz" "sandstone" "simplex" "sketchy"
                "slate" "solar" "spacelab" "superhero" "united" "vapor"
-               "yeti" "zephyr"]
-      :default-theme "sketchy"
+               "yeti" "lumen"]
+      :default-theme "sandstone"
       :assets {:base-path "/assets"
                :logo "/images/logo.png"
                :placeholder "/images/placeholder_profile.png"
                :thumbnail-width 42
-               :thumbnail-height 32}
-      :frontend {:css ["dataTables.bootstrap5.min.css"
-                       "bootstrap-icons/font/bootstrap-icons.css"]
-                 :js ["jquery-3.7.1.min.js"
-                      "bootstrap.bundle.min.js"
-                      "jquery.dataTables.min.js"
-                      "dataTables.bootstrap5.min.js"]}}
+               :thumbnail-height 32}}
 
  :security {:csrf-token-name "anti-forgery-token"
             :ajax-header "x-requested-with"
@@ -85,31 +79,34 @@
                :db :mysql           ; MySQL connection reference
                :pg :postgres        ; PostgreSQL connection reference
                :localdb :sqlite}    ; SQLite connection reference
- 
+
  ;; --- Application Settings ---
  :uploads      "./uploads/bitacora/"
  :site-name    "BFMS"
- :company-name "PESCASOFT "
+ :company-name "PESCASOFT"
  :port         3000
  :tz           "US/Pacific"
- :base-url     "http://localhost:3000/"
- :img-url      "http://localhost:3000/uploads/"
+ :base-url "http://localhost:3000/"
+ :img-url "http://localhost:3000/uploads/"
  :path         "/uploads/"
 
  ;; --- File Upload Settings ---
  :max-upload-mb 5
- :allowed-image-exts ["jpg" "jpeg" "png" "gif" "bmp" "webp"]}
+ :allowed-image-exts ["jpg" "jpeg" "png" "gif" "bmp" "webp"]
+ :allowed-upload-exts {:file ["jpg" "jpeg" "png" "gif" "bmp" "webp"]
+                       :pdf ["pdf"]
+                       :document ["doc" "docx" "txt" "odt"]}
 
- ;; --- Company Info (bilingual) ---
-  :company {:name {:es "BAZAR DURAN" :en "BAZAR DURAN"}
-            :address {:es "Calz. de las Americas número 613 Cuatemoc Norte, Mexicali, Mexico" :en "Calz. de las Americas número 613 Cuatemoc Norte, Mexicali, Mexico"}
-            :phone {:es "52 1 686 149 3404" :en "+52 1 686 149 3404"}
-            :email {:es "ic.paulinfd@hotmail.com" :en "ic.paulinfd@hotmail.com"}
-            :website {:es "www.BAZARDURAN.com" :en "www.BAZARDURAN.com"}
-            :rfc "BADU123456ABC"
-            :notes {:es "Precio sujeto a cambios sin previo aviso. Servicio garantizado por 30 días."
-                    :en "Price subject to changes without prior notice. Service guaranteed for 30 days."}}}
-;; --- Email Settings ---
+ :company {:name {:es "BAZAR DURAN" :en "BAZAR DURAN"}
+           :address {:es "Calz. de las Americas número 613 Cuatemoc Norte, Mexicali, Mexico" :en "Calz. de las Americas número 613 Cuatemoc Norte, Mexicali, Mexico"}
+           :phone {:es "52 1 686 149 3404" :en "+52 1 686 149 3404"}
+           :email {:es "ic.paulinfd@hotmail.com" :en "ic.paulinfd@hotmail.com"}
+           :website {:es "www.BAZARDURAN.com" :en "www.BAZARDURAN.com"}
+           :rfc "BADU123456ABC"
+           :notes {:es "Precio sujeto a cambios sin previo aviso. Servicio garantizado por 30 días."
+                   :en "Price subject to changes without prior notice. Service guaranteed for 30 days."}}
+
+ ;; --- Email Settings ---
  :email-host "change_me" ; smtp.provider.com
  :email-port 465
  :email-user "change_me" ; joeblo@server.com

@@ -14,7 +14,7 @@
   [username password]
   (let [where-clause ["username = ?" username]
         result (first (Update db :users {:password password} where-clause))]
-    (Integer. result)))
+    (Integer. ^Integer result)))
 
 (comment
   (get-user "sistema@gmail.com")
